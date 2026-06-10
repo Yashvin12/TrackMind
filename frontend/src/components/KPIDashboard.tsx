@@ -1,96 +1,113 @@
-import { motion } from 'framer-motion'
 import { KPIMetrics } from '../types/api'
-
-interface Props {
-  metrics: KPIMetrics | null
-}
+import { Train } from '../types/train'
+import { motion } from 'framer-motion'
 
 interface KPICardProps {
   label: string
   value: string | number
-  sub?: string
-  color?: string
+  sub: string
+  accent: string
+  blink?: boolean
   index: number
 }
 
-function KPICard({ label, value, sub, color = 'text-indigo-400', index }: KPICardProps) {
+function KPICard({ label, value, sub, accent, blink = false, index }: KPICardProps) {
   return (
     <motion.div
-      className="card flex flex-col gap-1"
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.06 }}
+      transition={{ delay: index * 0.04 }}
+      className="flex flex-col gap-0.5"
+      style={{ minWidth: 80 }}
     >
-      <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">{label}</span>
-      <span className={`text-2xl font-bold font-mono ${color}`}>{value}</span>
-      {sub && <span className="text-xs text-slate-500">{sub}</span>}
+      <div
+        className="text-xs"
+        style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}
+      >
+        {label.toUpperCase()}
+      </div>
+      <div
+        className="font-heading font-bold text-base leading-tight"
+        style={{
+          color: accent,
+          fontFamily: 'var(--font-mono)',
+          animation: blink ? 'pulse 1.5s ease-in-out infinite' : undefined,
+        }}
+      >
+        {value}
+      </div>
+      <div className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>
+        {sub}
+      </div>
     </motion.div>
   )
 }
 
-export function KPIDashboard({ metrics }: Props) {
-  if (!metrics) {
-    return (
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-        {Array.from({ length: 7 }).map((_, i) => (
-          <div key={i} className="card animate-pulse">
-            <div className="h-3 bg-slate-800 rounded w-2/3 mb-2" />
-            <div className="h-7 bg-slate-800 rounded w-1/2" />
-          </div>
-        ))}
-      </div>
-    )
-  }
+interface Props {
+  metrics: KPIMetrics
+  trains: Record<string, Train>
+}
+
+export function KPIDashboard({ metrics, trains }: Props) {
+  const totalTrains = Object.keys(trains).length
 
   const cards: Omit<KPICardProps, 'index'>[] = [
     {
-      label: 'Active Trains',
-      value: metrics.total_trains,
-      sub: 'on section',
-      color: 'text-blue-400',
+      label: 'Trains Active',
+      value: `${metrics.active_trains ?? totalTrains}`,
+      sub: `${metrics.completed_trains ?? 0} completed`,
+      accent: 'var(--accent)',
     },
     {
       label: 'Conflicts',
       value: metrics.active_conflicts,
-      sub: 'active',
-      color: metrics.active_conflicts > 0 ? 'text-red-400' : 'text-emerald-400',
+      sub: metrics.active_conflicts > 0 ? 'needs attention' : 'network clear',
+      accent: metrics.active_conflicts > 0 ? 'var(--danger)' : 'var(--success)',
+      blink: metrics.active_conflicts > 0,
     },
     {
       label: 'Avg Delay',
-      value: `${metrics.avg_delay_min.toFixed(1)} min`,
-      sub: 'current',
-      color: 'text-amber-400',
+      value: `${metrics.avg_delay_min.toFixed(1)}m`,
+      sub: 'network average',
+      accent:
+        metrics.avg_delay_min > 15
+          ? 'var(--danger)'
+          : metrics.avg_delay_min > 5
+          ? 'var(--warning)'
+          : 'var(--success)',
     },
     {
       label: 'Throughput',
       value: `${metrics.throughput_pct.toFixed(0)}%`,
       sub: 'of schedule',
-      color: 'text-indigo-400',
+      accent: metrics.throughput_pct >= 90 ? 'var(--success)' : 'var(--warning)',
     },
     {
       label: 'Accepted',
       value: metrics.recommendations_accepted,
       sub: 'recommendations',
-      color: 'text-emerald-400',
+      accent: 'var(--success)',
     },
     {
       label: 'Overridden',
       value: metrics.recommendations_overridden,
       sub: 'by controller',
-      color: 'text-orange-400',
+      accent: '#f97316',
     },
     {
-      label: 'Delay Reduction',
+      label: 'Delay Saved',
       value: `${metrics.delay_reduction_pct.toFixed(0)}%`,
-      sub: 'vs no system',
-      color: 'text-emerald-400',
+      sub: 'vs unassisted',
+      accent: 'var(--secondary)',
     },
   ]
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+    <div className="flex items-center gap-6 overflow-x-auto pb-0.5">
       {cards.map((card, i) => (
-        <KPICard key={card.label} {...card} index={i} />
+        <div key={card.label} className="flex-shrink-0">
+          <KPICard {...card} index={i} />
+        </div>
       ))}
     </div>
   )
