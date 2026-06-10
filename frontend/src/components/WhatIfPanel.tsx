@@ -72,8 +72,8 @@ const DISRUPTION_TYPES: Array<{
     icon: '🌧',
     description: 'Apply network-wide speed restrictions due to severe weather.',
     params: [
-      { key: 'speed_reduction_pct', label: 'Speed Reduction %', type: 'number', default: 30, min: 10, max: 70 },
-      { key: 'duration_min',        label: 'Duration (min)',     type: 'number', default: 60, min: 15, max: 180 },
+      { key: 'speed_factor', label: 'Speed Factor', type: 'number', default: 0.6, min: 0.1, max: 1.0 },
+      { key: 'delay_add',    label: 'Delay Add (min)',     type: 'number', default: 5, min: 1, max: 60 },
     ],
   },
 ]

@@ -104,11 +104,11 @@ const PAGE_VARIANT = {
 // ── Main App ───────────────────────────────────────────────────────────────────
 export default function App() {
   const {
-    trains, conflicts, stationState, blockOccupancy, signalStates,
+    trains, conflicts, liveConflicts, conflictHistory, stationState, blockOccupancy, signalStates,
     simulationRunning, sessionId, simElapsedSec,
     kpis, activeView, wsConnected, auditLogs, predictions, whatIfResult, activeRecommendation,
     setActiveView, setWsConnected, setKpis, applyWSUpdate, addAuditLog,
-    setPredictions, setActiveRecommendation,
+    setPredictions, setActiveRecommendation, exitFocusMode, tickConflictLifecycles,
   } = useStore()
 
   const queryClient = useQueryClient()
@@ -167,7 +167,7 @@ export default function App() {
 
   // ── Simulation controls ────────────────────────────────────────────────────
   const startMutation = useMutation({
-    mutationFn: () => simulationAPI.start('default').then((r) => r.data),
+    mutationFn: () => simulationAPI.start('demo_5stn').then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kpis'] }),
   })
 
@@ -184,16 +184,23 @@ export default function App() {
     onSuccess: () => queryClient.invalidateQueries(),
   })
 
-  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  // ── Conflict lifecycle tick (every 500ms) ─────────────────────────────────
+  useEffect(() => {
+    const id = setInterval(() => tickConflictLifecycles(), 500)
+    return () => clearInterval(id)
+  }, [tickConflictLifecycles])
+
+  // ── ESC exits focus mode ───────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') exitFocusMode()
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
       const item = NAV_ITEMS.find((n) => n.shortcut === e.key)
       if (item) setActiveView(item.id)
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [setActiveView])
+  }, [setActiveView, exitFocusMode])
 
   // ── Accept recommendation ──────────────────────────────────────────────────
   const handleAccept = useCallback(
@@ -246,7 +253,9 @@ export default function App() {
   )
 
   // ── Derived values ─────────────────────────────────────────────────────────
-  const conflictCount = conflicts.filter((c) => !c.resolved).length
+  const conflictCount = liveConflicts.filter(
+    (c) => c.lifecycle !== 'RESOLVED' && c.lifecycle !== 'ARCHIVED'
+  ).length
 
   const formatElapsed = (sec: number) => {
     const h = Math.floor(sec / 3600)
@@ -498,7 +507,10 @@ export default function App() {
                   />
                 </div>
                 <div className="flex flex-col gap-4">
-                  <ConflictAlert conflicts={conflicts} />
+                  <ConflictAlert
+                    liveConflicts={liveConflicts}
+                    conflictHistory={conflictHistory}
+                  />
                   <ControllerButtons
                     trains={trains}
                     simulationRunning={simulationRunning}
@@ -523,7 +535,11 @@ export default function App() {
             {/* Conflicts */}
             {activeView === 'conflicts' && (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <ConflictAlert conflicts={conflicts} expanded />
+                <ConflictAlert
+                  liveConflicts={liveConflicts}
+                  conflictHistory={conflictHistory}
+                  expanded
+                />
                 {activeRecommendation && (
                   <RecommendationCards
                     recommendation={activeRecommendation}

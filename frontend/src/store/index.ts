@@ -13,6 +13,24 @@ export type ViewId =
   | 'audit'
   | 'predictions'
 
+// Conflict lifecycle state machine
+export type ConflictLifecycle = 'DETECTED' | 'ACTIVE' | 'RESOLVING' | 'RESOLVED' | 'ARCHIVED'
+
+// Enriched conflict record tracked in the UI
+export interface LiveConflict extends Conflict {
+  lifecycle: ConflictLifecycle
+  detectedAt: number   // epoch ms
+  resolvedAt?: number  // epoch ms
+}
+
+// Recent event for the history feed
+export interface HistoryEvent {
+  id: string
+  timestamp: number // epoch ms
+  message: string
+  type: 'conflict_detected' | 'conflict_resolved' | 'signal_delay' | 'train_held' | 'recommendation_applied'
+}
+
 export interface WhatIfResult {
   disruption_type: string
   disruption_params: Record<string, unknown>
@@ -50,6 +68,8 @@ interface AppState {
   // Simulation
   trains: Record<string, Train>
   conflicts: Conflict[]
+  liveConflicts: LiveConflict[]      // enriched, lifecycle-managed conflicts
+  conflictHistory: HistoryEvent[]    // recent events feed
   stations: string[]
   stationState: Record<string, StationState>
   blockOccupancy: Record<string, string[]>
@@ -62,20 +82,28 @@ interface AppState {
   activeView: ViewId
   wsConnected: boolean
   selectedTrainId: string | null
-  selectedConflictId: string | null
+  selectedConflictId: string | null  // Focus Mode target
+  focusModeActive: boolean
 
   // Data
   kpis: KPIMetrics | null
+  smoothedKpis: KPIMetrics | null    // debounced display values
+  kpisLastUpdated: number            // epoch ms of last smoothedKpis update
   activeRecommendation: Recommendation | null
   auditLogs: AuditLog[]
   whatIfResult: WhatIfResult | null
   predictions: PredictionEntry[]
 
+  // WS throttling
+  _pendingWSPayload: Parameters<AppState['applyWSUpdate']>[0] | null
+  _lastWSFlush: number
+
   // UI Actions
   setActiveView: (activeView: ViewId) => void
   setWsConnected: (wsConnected: boolean) => void
   setSelectedTrain: (selectedTrainId: string | null) => void
-  setSelectedConflict: (selectedConflictId: string | null) => void
+  setSelectedConflict: (id: string | null) => void
+  exitFocusMode: () => void
 
   // Data Actions
   setKpis: (kpis: KPIMetrics) => void
@@ -84,8 +112,12 @@ interface AppState {
   setAuditLogs: (auditLogs: AuditLog[]) => void
   setWhatIfResult: (whatIfResult: WhatIfResult | null) => void
   setPredictions: (predictions: PredictionEntry[]) => void
+  addHistoryEvent: (event: HistoryEvent) => void
 
-  // Aggregated WS Update
+  // Conflict lifecycle tick (call every 500ms)
+  tickConflictLifecycles: () => void
+
+  // Aggregated WS Update (throttled to 2Hz)
   applyWSUpdate: (payload: {
     trains?: Record<string, Train>
     conflicts?: Conflict[]
@@ -99,10 +131,72 @@ interface AppState {
   }) => void
 }
 
-export const useStore = create<AppState>((set) => ({
+// Merge incoming raw conflicts with existing LiveConflicts, preserving lifecycle state
+function mergeConflicts(
+  existing: LiveConflict[],
+  incoming: Conflict[],
+  addEvent: (e: HistoryEvent) => void
+): LiveConflict[] {
+  const now = Date.now()
+  const incomingMap = new Map(incoming.map((c) => [c.id, c]))
+  const existingMap = new Map(existing.map((c) => [c.id, c]))
+
+  const result: LiveConflict[] = []
+
+  // Process all incoming conflicts
+  for (const raw of incoming) {
+    const prev = existingMap.get(raw.id)
+    if (!prev) {
+      // New conflict detected
+      const newLC: LiveConflict = { ...raw, lifecycle: 'DETECTED', detectedAt: now }
+      result.push(newLC)
+      addEvent({
+        id: `evt_${now}_${raw.id}`,
+        timestamp: now,
+        message: `Block conflict detected — ${raw.block_section}`,
+        type: 'conflict_detected',
+      })
+    } else {
+      // Update the existing one, preserving lifecycle metadata
+      result.push({
+        ...raw,
+        lifecycle: prev.lifecycle === 'DETECTED' || prev.lifecycle === 'ACTIVE' ? prev.lifecycle : prev.lifecycle,
+        detectedAt: prev.detectedAt,
+        resolvedAt: prev.resolvedAt,
+      })
+    }
+  }
+
+  // Keep resolved conflicts that are still within the 10s grace window
+  for (const lc of existing) {
+    if (!incomingMap.has(lc.id) && lc.lifecycle !== 'ARCHIVED') {
+      if (lc.lifecycle !== 'RESOLVED' && lc.lifecycle !== 'RESOLVING') {
+        // Just transitioned to resolved
+        const resolvedLC: LiveConflict = { ...lc, lifecycle: 'RESOLVED', resolvedAt: now, resolved: true }
+        result.push(resolvedLC)
+        addEvent({
+          id: `evt_${now}_res_${lc.id}`,
+          timestamp: now,
+          message: `Block conflict resolved — ${lc.block_section}`,
+          type: 'conflict_resolved',
+        })
+      } else {
+        result.push(lc)
+      }
+    }
+  }
+
+  return result
+}
+
+const WS_THROTTLE_MS = 500 // 2Hz
+
+export const useStore = create<AppState>((set, get) => ({
   // ── Simulation defaults ──────────────────────────────────────────────────────
   trains: {},
   conflicts: [],
+  liveConflicts: [],
+  conflictHistory: [],
   stations: ['MUM', 'KLD', 'LNL', 'PNE', 'SRT'],
   stationState: {},
   blockOccupancy: {},
@@ -116,39 +210,123 @@ export const useStore = create<AppState>((set) => ({
   wsConnected: false,
   selectedTrainId: null,
   selectedConflictId: null,
+  focusModeActive: false,
 
   // ── Data defaults ────────────────────────────────────────────────────────────
   kpis: null,
+  smoothedKpis: null,
+  kpisLastUpdated: 0,
   activeRecommendation: null,
   auditLogs: [],
   whatIfResult: null,
   predictions: [],
+  _pendingWSPayload: null,
+  _lastWSFlush: 0,
 
   // ── UI Actions ───────────────────────────────────────────────────────────────
   setActiveView: (activeView) => set({ activeView }),
   setWsConnected: (wsConnected) => set({ wsConnected }),
   setSelectedTrain: (selectedTrainId) => set({ selectedTrainId }),
-  setSelectedConflict: (selectedConflictId) => set({ selectedConflictId }),
+  setSelectedConflict: (id) => set({
+    selectedConflictId: id,
+    focusModeActive: id !== null,
+  }),
+  exitFocusMode: () => set({ selectedConflictId: null, focusModeActive: false }),
 
   // ── Data Actions ─────────────────────────────────────────────────────────────
-  setKpis: (kpis) => set({ kpis }),
+  setKpis: (kpis) => {
+    const now = Date.now()
+    const prev = get().kpisLastUpdated
+    const prevSmoothed = get().smoothedKpis
+    // Significant event: conflict count changed
+    const isSignificant =
+      !prevSmoothed ||
+      prevSmoothed.active_conflicts !== kpis.active_conflicts ||
+      now - prev > 5000
+
+    if (isSignificant) {
+      set({ kpis, smoothedKpis: kpis, kpisLastUpdated: now })
+    } else {
+      set({ kpis })
+    }
+  },
   setActiveRecommendation: (activeRecommendation) => set({ activeRecommendation }),
   addAuditLog: (log) => set((s) => ({ auditLogs: [log, ...s.auditLogs].slice(0, 200) })),
   setAuditLogs: (auditLogs) => set({ auditLogs }),
   setWhatIfResult: (whatIfResult) => set({ whatIfResult }),
   setPredictions: (predictions) => set({ predictions }),
+  addHistoryEvent: (event) =>
+    set((s) => ({ conflictHistory: [event, ...s.conflictHistory].slice(0, 50) })),
 
-  // ── Aggregated WS Update ─────────────────────────────────────────────────────
-  applyWSUpdate: (payload) =>
-    set((s) => ({
-      trains:            payload.trains          ?? s.trains,
-      conflicts:         payload.conflicts        ?? s.conflicts,
-      stationState:      payload.station_state    ?? s.stationState,
-      blockOccupancy:    payload.block_occupancy  ?? s.blockOccupancy,
-      signalStates:      payload.signal_states    ?? s.signalStates,
-      kpis:              payload.kpis             ?? s.kpis,
-      simulationRunning: payload.running          ?? s.simulationRunning,
-      sessionId:         payload.session_id       ?? s.sessionId,
-      simElapsedSec:     payload.sim_elapsed_sec  ?? s.simElapsedSec,
-    })),
+  // ── Conflict lifecycle tick ───────────────────────────────────────────────────
+  tickConflictLifecycles: () =>
+    set((s) => {
+      const now = Date.now()
+      const updated = s.liveConflicts
+        .map((lc): LiveConflict => {
+          if (lc.lifecycle === 'DETECTED' && now - lc.detectedAt > 1000) {
+            return { ...lc, lifecycle: 'ACTIVE' }
+          }
+          if (lc.lifecycle === 'RESOLVED' && lc.resolvedAt && now - lc.resolvedAt > 10000) {
+            return { ...lc, lifecycle: 'ARCHIVED' }
+          }
+          return lc
+        })
+        .filter((lc) => lc.lifecycle !== 'ARCHIVED')
+      return { liveConflicts: updated }
+    }),
+
+  // ── Throttled WS Update (2Hz) ─────────────────────────────────────────────────
+  applyWSUpdate: (payload) => {
+    const now = Date.now()
+    const { _lastWSFlush } = get()
+    const elapsed = now - _lastWSFlush
+
+    if (elapsed >= WS_THROTTLE_MS) {
+      // Flush immediately
+      set((s) => {
+        const addEvent = (e: HistoryEvent) =>
+          set((ss) => ({ conflictHistory: [e, ...ss.conflictHistory].slice(0, 50) }))
+
+        const rawConflicts = payload.conflicts ?? s.conflicts
+        const updatedLive = payload.conflicts
+          ? mergeConflicts(s.liveConflicts, rawConflicts, addEvent)
+          : s.liveConflicts
+
+        const newKpis = payload.kpis ?? s.kpis
+        const kpisLastUpdated = newKpis && newKpis !== s.kpis ? now : s.kpisLastUpdated
+        const smoothedKpis = newKpis && (now - s.kpisLastUpdated > 5000 || !s.smoothedKpis || s.smoothedKpis.active_conflicts !== newKpis.active_conflicts)
+          ? newKpis
+          : s.smoothedKpis
+
+        return {
+          trains:            payload.trains          ?? s.trains,
+          conflicts:         rawConflicts,
+          liveConflicts:     updatedLive,
+          stationState:      payload.station_state   ?? s.stationState,
+          blockOccupancy:    payload.block_occupancy ?? s.blockOccupancy,
+          signalStates:      payload.signal_states   ?? s.signalStates,
+          kpis:              newKpis,
+          smoothedKpis,
+          kpisLastUpdated,
+          simulationRunning: payload.running         ?? s.simulationRunning,
+          sessionId:         payload.session_id      ?? s.sessionId,
+          simElapsedSec:     payload.sim_elapsed_sec ?? s.simElapsedSec,
+          _lastWSFlush:      now,
+          _pendingWSPayload: null,
+        }
+      })
+    } else {
+      // Queue for next flush
+      set({ _pendingWSPayload: payload })
+      // Schedule a deferred flush
+      const delay = WS_THROTTLE_MS - elapsed
+      setTimeout(() => {
+        const pending = get()._pendingWSPayload
+        if (pending) {
+          get().applyWSUpdate(pending)
+        }
+      }, delay)
+    }
+  },
 }))
