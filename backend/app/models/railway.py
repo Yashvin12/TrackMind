@@ -105,7 +105,7 @@ class SimulationEventModel(Base):
     station_code = Column(String(8), nullable=True)
     speed_kmh = Column(Float, nullable=True)
     delay_min = Column(Float, default=0.0)
-    metadata = Column(JSON, default=dict)
+    event_metadata = Column("metadata", JSON, default=dict)
 
     train = relationship("TrainModel", back_populates="events")
 
