@@ -15,14 +15,13 @@ const api: AxiosInstance = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach request IDs to every outgoing request
+// Request IDs
 api.interceptors.request.use((config) => {
-  const id = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-  config.headers['x-request-id'] = id
+  config.headers['x-request-id'] = `req_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
   return config
 })
 
-// Global error logging (not swallowing — just logging)
+// Error logging
 api.interceptors.response.use(
   (res) => res,
   (err) => {
@@ -31,45 +30,64 @@ api.interceptors.response.use(
   }
 )
 
-// ── Health ─────────────────────────────────────────────────────────────────
+// ── Health ──────────────────────────────────────────────────────────────────
 export const healthAPI = {
   check: (): Promise<AxiosResponse<HealthResponse>> => api.get('/health'),
 }
 
-// ── Simulation ─────────────────────────────────────────────────────────────
+// ── Simulation ──────────────────────────────────────────────────────────────
 export const simulationAPI = {
-  start: (scenarioId: string): Promise<AxiosResponse<{ status: string }>> =>
+  start: (scenarioId: string): Promise<AxiosResponse<{ status: string; session_id: string }>> =>
     api.post('/simulate/start', { scenario_id: scenarioId }),
 
-  reset: (): Promise<AxiosResponse<{ status: string }>> => api.post('/simulate/reset'),
+  reset: (): Promise<AxiosResponse<{ status: string }>> =>
+    api.post('/simulate/reset'),
 
-  getState: (): Promise<AxiosResponse<SimulationState>> => api.get('/simulate/state'),
+  pause: (): Promise<AxiosResponse<{ status: string }>> =>
+    api.post('/simulate/pause'),
+
+  resume: (): Promise<AxiosResponse<{ status: string }>> =>
+    api.post('/simulate/resume'),
+
+  getState: (): Promise<AxiosResponse<SimulationState>> =>
+    api.get('/simulate/state'),
+
+  disruption: (
+    disruption_type: string,
+    params: Record<string, unknown>
+  ): Promise<AxiosResponse<{ applied: boolean; message: string }>> =>
+    api.post('/simulate/disruption', { disruption_type, params }),
+
+  holdTrain: (train_id: string): Promise<AxiosResponse<{ status: string }>> =>
+    api.post('/simulate/hold', { train_id }),
+
+  releaseTrain: (train_id: string): Promise<AxiosResponse<{ status: string }>> =>
+    api.post('/simulate/release', { train_id }),
 }
 
-// ── Conflicts ─────────────────────────────────────────────────────────────
+// ── Conflicts ───────────────────────────────────────────────────────────────
 export const conflictAPI = {
-  detect: (
-    trains: Record<string, Train>,
-    section: unknown,
-    lookaheadMin = 60
-  ): Promise<AxiosResponse<ConflictDetectionResponse>> =>
-    api.post('/conflicts/detect', { trains, section, lookahead_min: lookaheadMin }),
+  detect: (lookahead_min = 60): Promise<AxiosResponse<ConflictDetectionResponse>> =>
+    api.post('/conflicts/detect', null, { params: { lookahead_min } }),
 
   list: (): Promise<AxiosResponse<{ conflicts: Conflict[]; count: number }>> =>
     api.get('/conflicts/'),
 }
 
-// ── Optimization ──────────────────────────────────────────────────────────
+// ── Optimization ────────────────────────────────────────────────────────────
 export const optimizeAPI = {
   solve: (
-    trains: Record<string, Train>,
-    conflicts: Conflict[],
+    _trains: Record<string, Train>,
+    _conflicts: Conflict[],
     timeoutSec = 5
   ): Promise<AxiosResponse<OptimizeSolveResponse>> =>
-    api.post('/optimize/solve', { trains, conflicts, timeout_sec: timeoutSec }),
+    api.post('/optimize/solve', { timeout_sec: timeoutSec }),
+
+  solutions: (): Promise<AxiosResponse<{ solutions: unknown[]; conflicts: Conflict[] }>> =>
+    api.get('/optimize/solutions'),
 }
 
-// ── Recommendations ──────────────────────────────────────────────────────
+// ── Recommendations ─────────────────────────────────────────────────────────
 export const recommendAPI = {
   get: (conflictId: string): Promise<AxiosResponse<Recommendation>> =>
     api.get(`/recommendations/${conflictId}`),
@@ -82,15 +100,36 @@ export const recommendAPI = {
     reason: string
   ): Promise<AxiosResponse<{ status: string; audit_log_id: string }>> =>
     api.post(`/recommendations/${id}/override`, { reason }),
+
+  list: (): Promise<AxiosResponse<{ recommendations: Recommendation[]; count: number }>> =>
+    api.get('/recommendations/'),
 }
 
-// ── Audit ─────────────────────────────────────────────────────────────────
+// ── What-If ─────────────────────────────────────────────────────────────────
+export const whatifAPI = {
+  simulate: (
+    disruption_type: string,
+    params: Record<string, unknown>
+  ): Promise<AxiosResponse<unknown>> =>
+    api.post('/whatif/simulate', { disruption_type, params }),
+}
+
+// ── KPI ─────────────────────────────────────────────────────────────────────
+export const kpiAPI = {
+  get: (): Promise<AxiosResponse<unknown>> =>
+    api.get('/kpi/'),
+
+  predictions: (): Promise<AxiosResponse<{ predictions: unknown[] }>> =>
+    api.get('/kpi/predictions'),
+}
+
+// ── Audit ───────────────────────────────────────────────────────────────────
 export const auditAPI = {
   list: (
-    sectionId?: string,
+    sessionId?: string,
     limit = 100
-  ): Promise<AxiosResponse<{ logs: AuditLog[]; count: number }>> =>
-    api.get('/audit/', { params: { section_id: sectionId, limit } }),
+  ): Promise<AxiosResponse<{ logs: AuditLog[]; count: number; total: number }>> =>
+    api.get('/audit/', { params: { session_id: sessionId, limit } }),
 }
 
 export default api

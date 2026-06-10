@@ -1,20 +1,37 @@
 export type TrainType = 'rajdhani' | 'express' | 'passenger' | 'freight' | 'departmental'
-
 export type PriorityClass = 5 | 3 | 2 | 1 | 0
+export type TrainStatus = 'waiting' | 'running' | 'dwelling' | 'stopped' | 'completed'
 
 export interface Train {
+  // Identity
   id: string
+  number?: string
+  name?: string
   type: TrainType
-  current_location: string
-  speed_kmh: number
+  train_type?: TrainType           // alias used by some backend responses
+
+  // Scheduling
   scheduled_path: string[]
-  scheduled_arrival_terminal: string // ISO-8601
+  path_index?: number
+  direction?: number               // 1 = up, -1 = down
+  scheduled_arrival_terminal?: string
+
+  // Live state
+  status?: TrainStatus
+  current_location: string
+  current_block?: string | null
+  progress_pct?: number            // 0..1 through current block
+  km_position?: number
+  speed_kmh: number
+  max_speed_kmh?: number
+  dwell_remaining_sec?: number
+  assigned_platform?: number | null
+
+  // Performance
   current_delay_min: number
   priority_class: PriorityClass
-  load_tonnes: number
-  loco_power_kw: number
-  created_at?: string
-  updated_at?: string
+  load_tonnes?: number
+  loco_power_kw?: number
 }
 
 export const PRIORITY_LABELS: Record<PriorityClass, string> = {
@@ -26,9 +43,9 @@ export const PRIORITY_LABELS: Record<PriorityClass, string> = {
 }
 
 export const TRAIN_TYPE_COLORS: Record<TrainType, string> = {
-  rajdhani: '#818cf8',
-  express: '#34d399',
-  passenger: '#60a5fa',
-  freight: '#f59e0b',
+  rajdhani:     '#818cf8',
+  express:      '#34d399',
+  passenger:    '#60a5fa',
+  freight:      '#fbbf24',
   departmental: '#94a3b8',
 }

@@ -1,31 +1,34 @@
 import { Train } from './train'
 import { Conflict } from './conflict'
-import { Recommendation, AuditLog } from './recommendation'
+import { Recommendation } from './recommendation'
 
 export interface SimulationState {
+  session_id?: string
   simulation_time: string
+  sim_elapsed_sec?: number
   trains: Record<string, Train>
-  block_occupancy: Record<string, string | null>
+  block_occupancy: Record<string, string[]>
+  station_state?: Record<string, unknown>
+  signal_states?: Record<string, string>
   active_conflicts: Conflict[]
   completed_trains: string[]
   running: boolean
   sim_speed: number
+  kpis?: KPIMetrics
 }
 
 export interface ConflictDetectionResponse {
   conflicts: Conflict[]
-  generated_at: string
   count: number
   execution_time_ms: number
-  request_id: string
+  lookahead_min?: number
 }
 
 export interface OptimizeSolveResponse {
-  solution: Record<string, number>
-  generated_at: string
+  recommendation: Recommendation
+  solutions: unknown[]
+  conflicts: Conflict[]
   execution_time_ms: number
-  solver_status: string
-  objective_value: number
 }
 
 export interface HealthResponse {
@@ -34,21 +37,32 @@ export interface HealthResponse {
   app: string
   db?: string
   redis?: string
+  simulation?: {
+    running: boolean
+    session_id: string
+    trains: number
+    ws_clients: number
+  }
   timestamp: string
 }
 
 export interface ApiError {
   error: string
-  request_id: string
-  details?: Record<string, unknown>
+  detail?: string
+  request_id?: string
 }
 
 export interface KPIMetrics {
-  total_trains: number
+  total_trains?: number
+  active_trains?: number
+  completed_trains?: number
   active_conflicts: number
   avg_delay_min: number
   throughput_pct: number
   recommendations_accepted: number
   recommendations_overridden: number
   delay_reduction_pct: number
+  block_utilization_pct?: number
+  trains_on_time?: number
+  trains_delayed?: number
 }
