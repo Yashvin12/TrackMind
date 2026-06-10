@@ -1,6 +1,6 @@
 import redis.asyncio as aioredis
 from redis.asyncio import Redis
-from src.core.config import settings
+from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,6 @@ async def init_redis() -> None:
         retry_on_timeout=True,
         health_check_interval=30,
     )
-    # Test connection
     await _redis_pool.ping()
     logger.info("Redis connection established")
 

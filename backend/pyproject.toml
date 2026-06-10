@@ -4,6 +4,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
 
 [tool.mypy]
 python_version = "3.11"
@@ -11,5 +15,13 @@ strict = true
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["src"]
-omit = ["tests/*", "*/migrations/*"]
+source = ["app"]
+omit = ["tests/*", "*/migrations/*", "app/db/migrations/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
