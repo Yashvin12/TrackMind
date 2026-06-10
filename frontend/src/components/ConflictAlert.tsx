@@ -88,14 +88,11 @@ const ConflictCard = memo(function ConflictCard({
 
   return (
     <motion.div
-      layout
-      initial={{ opacity: 0, x: -6 }}
+      initial={false}
       animate={{
         opacity: isResolved ? 0.55 : 1,
-        x: 0,
       }}
-      exit={{ opacity: 0, x: 8, transition: { duration: 0.25 } }}
-      transition={{ duration: 0.2 }}
+      exit={{ opacity: 0, transition: { duration: 0.2 } }}
       className="rounded-xl p-3 flex flex-col gap-2"
       style={{
         background:  isSelected ? `${colors.bg.replace(')', ', 0.2)').replace('hsl', 'hsla')}` : colors.bg,
@@ -274,7 +271,7 @@ export function ConflictAlert({ liveConflicts, conflictHistory, expanded = false
         className={clsx('flex flex-col gap-2 overflow-y-auto', expanded ? 'max-h-[480px]' : 'max-h-64')}
         style={{ scrollBehavior: 'smooth' }}
       >
-        <AnimatePresence initial={false} mode="popLayout">
+        <AnimatePresence initial={false}>
           {sorted.length === 0 && (
             <motion.div
               key="empty"

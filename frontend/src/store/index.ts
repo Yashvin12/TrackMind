@@ -157,13 +157,25 @@ function mergeConflicts(
         type: 'conflict_detected',
       })
     } else {
-      // Update the existing one, preserving lifecycle metadata
-      result.push({
-        ...raw,
-        lifecycle: prev.lifecycle === 'DETECTED' || prev.lifecycle === 'ACTIVE' ? prev.lifecycle : prev.lifecycle,
-        detectedAt: prev.detectedAt,
-        resolvedAt: prev.resolvedAt,
-      })
+      // Return existing reference if key fields haven't changed — prevents unnecessary re-renders
+      const lifecycle = prev.lifecycle === 'DETECTED' || prev.lifecycle === 'ACTIVE' ? prev.lifecycle : prev.lifecycle
+      const sameEnough =
+        prev.severity === raw.severity &&
+        prev.time_to_conflict_min === raw.time_to_conflict_min &&
+        prev.conflict_type === raw.conflict_type &&
+        prev.block_section === raw.block_section &&
+        prev.lifecycle === lifecycle
+
+      if (sameEnough) {
+        result.push(prev)
+      } else {
+        result.push({
+          ...raw,
+          lifecycle,
+          detectedAt: prev.detectedAt,
+          resolvedAt: prev.resolvedAt,
+        })
+      }
     }
   }
 
@@ -289,9 +301,17 @@ export const useStore = create<AppState>((set, get) => ({
           set((ss) => ({ conflictHistory: [e, ...ss.conflictHistory].slice(0, 50) }))
 
         const rawConflicts = payload.conflicts ?? s.conflicts
-        const updatedLive = payload.conflicts
-          ? mergeConflicts(s.liveConflicts, rawConflicts, addEvent)
-          : s.liveConflicts
+        let updatedLive: LiveConflict[]
+        if (payload.conflicts) {
+          const merged = mergeConflicts(s.liveConflicts, rawConflicts, addEvent)
+          // Reuse existing array if every element is reference-equal (nothing changed)
+          const isIdentical =
+            merged.length === s.liveConflicts.length &&
+            merged.every((lc, i) => lc === s.liveConflicts[i])
+          updatedLive = isIdentical ? s.liveConflicts : merged
+        } else {
+          updatedLive = s.liveConflicts
+        }
 
         const newKpis = payload.kpis ?? s.kpis
         const kpisLastUpdated = newKpis && newKpis !== s.kpis ? now : s.kpisLastUpdated
