@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>TrackMind - Operator Console</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&amp;family=JetBrains+Mono:wght@400;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "background": "#f6fafe",
+                        "on-background": "#171c1f",
+                        "secondary-fixed": "#dae2fd",
+                        "secondary-fixed-dim": "#bec6e0",
+                        "tertiary-fixed-dim": "#b7c8e1",
+                        "primary": "#004ac6",
+                        "error": "#ba1a1a",
+                        "surface-tint": "#0053db",
+                        "on-primary-container": "#eeefff",
+                        "primary-fixed": "#dbe1ff",
+                        "surface-bright": "#f6fafe",
+                        "tertiary-fixed": "#d3e4fe",
+                        "secondary": "#565e74",
+                        "primary-container": "#2563eb",
+                        "outline": "#737686",
+                        "primary-fixed-dim": "#b4c5ff",
+                        "error-container": "#ffdad6",
+                        "surface-container-low": "#f0f4f8",
+                        "outline-variant": "#c3c6d7",
+                        "on-tertiary-fixed-variant": "#38485d",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "on-tertiary-fixed": "#0b1c30",
+                        "on-error": "#ffffff",
+                        "surface-container": "#eaeef2",
+                        "on-primary-fixed-variant": "#003ea8",
+                        "on-primary-fixed": "#00174b",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#171c1f",
+                        "on-surface-variant": "#434655",
+                        "on-secondary-container": "#5c647a",
+                        "surface-container-high": "#e4e9ed",
+                        "inverse-on-surface": "#edf1f5",
+                        "surface-container-highest": "#dfe3e7",
+                        "surface-dim": "#d6dade",
+                        "inverse-surface": "#2c3134",
+                        "tertiary": "#46566c",
+                        "surface-variant": "#dfe3e7",
+                        "on-error-container": "#93000a",
+                        "on-secondary-fixed": "#131b2e",
+                        "tertiary-container": "#5e6e85",
+                        "secondary-container": "#dae2fd",
+                        "on-secondary-fixed-variant": "#3f465c",
+                        "inverse-primary": "#b4c5ff",
+                        "surface": "#f6fafe",
+                        "on-tertiary-container": "#e9f0ff",
+                        "slate-50": "#f8fafc",
+                        "slate-100": "#f1f5f9",
+                        "slate-200": "#e2e8f0",
+                        "slate-300": "#cbd5e1",
+                        "slate-500": "#64748b",
+                        "slate-900": "#0f172a",
+                        "red-50": "#fef2f2",
+                        "red-600": "#dc2626",
+                        "amber-50": "#fffbeb",
+                        "amber-500": "#f59e0b",
+                        "blue-600": "#2563eb",
+                        "green-500": "#22c55e"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem",
+                        "base": "2px"
+                    },
+                    "spacing": {
+                        "md": "12px",
+                        "baseline": "4px",
+                        "lg": "16px",
+                        "row-height-dense": "28px",
+                        "xl": "24px",
+                        "sm": "8px",
+                        "gutter": "4px",
+                        "xs": "4px",
+                        "margin-desktop": "12px"
+                    },
+                    "fontFamily": {
+                        "display-lg": ["IBM Plex Sans"],
+                        "data-mono": ["JetBrains Mono"],
+                        "data-mono-sm": ["JetBrains Mono"],
+                        "data-mono-bold": ["JetBrains Mono"],
+                        "label-caps": ["IBM Plex Sans"],
+                        "body-base": ["IBM Plex Sans"],
+                        "panel-header": ["IBM Plex Sans"]
+                    },
+                    "fontSize": {
+                        "display-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "data-mono": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "data-mono-sm": ["11px", { "lineHeight": "14px", "fontWeight": "400" }],
+                        "data-mono-bold": ["13px", { "lineHeight": "18px", "fontWeight": "700" }],
+                        "label-caps": ["11px", { "lineHeight": "14px", "letterSpacing": "0.07em", "fontWeight": "700" }],
+                        "body-base": ["13px", { "lineHeight": "18px", "fontWeight": "400" }],
+                        "panel-header": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1;
+        }
+        .grid-bg {
+            background-size: 12px 12px;
+            background-image: linear-gradient(to right, #e2e8f0 1px, transparent 1px), linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+        }
+        @keyframes pulse-red {
+            0% { opacity: 1; }
+            50% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+        .animate-pulse-red {
+            animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-900 font-body-base text-body-base h-screen overflow-hidden flex flex-col antialiased">
+<!-- TopNavBar -->
+<header class="bg-surface-container-highest dark:bg-surface-container-highest fixed top-0 w-full h-[44px] border-b border-outline-variant flex justify-between items-center px-lg w-full z-50">
+<div class="flex items-center gap-xl">
+<span class="font-display-lg text-display-lg font-bold text-primary dark:text-primary-fixed">TrackMind</span>
+<nav class="hidden md:flex gap-lg">
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-low transition-colors px-sm py-xs rounded-base" href="#">Throughput: 98%</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-low transition-colors px-sm py-xs rounded-base" href="#">Avg Delay: 1.2m</a>
+<a class="text-on-surface-variant font-medium hover:bg-surface-container-low transition-colors px-sm py-xs rounded-base" href="#">Conflicts: 0</a>
+</nav>
+</div>
+<div class="flex items-center gap-sm">
+<button class="p-xs hover:bg-surface-container-low transition-colors rounded-base text-on-surface-variant"><span class="material-symbols-outlined">timer</span></button>
+<button class="p-xs hover:bg-surface-container-low transition-colors rounded-base text-on-surface-variant"><span class="material-symbols-outlined">wifi</span></button>
+<button class="p-xs hover:bg-surface-container-low transition-colors rounded-base text-on-surface-variant"><span class="material-symbols-outlined">settings</span></button>
+</div>
+</header>
+<!-- Main Workspace -->
+<div class="flex flex-1 mt-[44px] mb-row-height-dense overflow-hidden">
+<!-- SideNavBar -->
+<nav class="bg-surface-container-low dark:bg-surface-container-low fixed left-0 top-[44px] w-[56px] h-[calc(100vh-44px)] border-r border-outline-variant flex flex-col items-center py-md space-y-md z-40">
+<div class="mb-lg flex flex-col items-center gap-xs">
+<div class="w-[32px] h-[32px] rounded-base bg-slate-300 overflow-hidden" data-alt="A clinical, highly detailed headshot of a mature female railway operator wearing a crisp white collared shirt and subtle headset. She is set against a clean, technical light-grey background. The lighting is bright and even, highlighting professionalism and focus, fitting a high-performance minimalist interface.">
+<!-- Placeholder for Avatar -->
+</div>
+</div>
+<a class="border-l-4 border-primary bg-secondary-fixed text-on-secondary-fixed p-sm w-full flex justify-center hover:bg-surface-container-high cursor-pointer transition-all duration-150" href="#" title="Map">
+<span class="material-symbols-outlined filled">map</span>
+</a>
+<a class="text-on-surface-variant p-sm w-full flex justify-center hover:bg-surface-container-high cursor-pointer transition-all duration-150 border-l-4 border-transparent" href="#" title="Register">
+<span class="material-symbols-outlined">list_alt</span>
+</a>
+<a class="text-on-surface-variant p-sm w-full flex justify-center hover:bg-surface-container-high cursor-pointer transition-all duration-150 border-l-4 border-transparent" href="#" title="Lab">
+<span class="material-symbols-outlined">science</span>
+</a>
+</nav>
+<!-- Canvas Area -->
+<main class="ml-[56px] flex-1 flex flex-col p-baseline gap-baseline overflow-hidden">
+<!-- Top Zones (Map & Queue) -->
+<div class="flex flex-1 gap-baseline overflow-hidden">
+<!-- Zone 1: Network Map -->
+<div class="w-[60%] bg-surface-container-lowest border border-slate-300 rounded-base relative overflow-hidden flex flex-col">
+<div class="h-[28px] border-b border-slate-200 flex items-center px-sm bg-slate-50">
+<span class="font-panel-header text-panel-header">ZONE ALPHA TOPOLOGY</span>
+</div>
+<div class="flex-1 grid-bg relative p-lg">
+<!-- Y-Axis Labels -->
+<div class="absolute left-md top-lg bottom-lg w-[40px] flex flex-col justify-between font-data-mono-sm text-data-mono-sm text-slate-500">
+<span>STN-A</span>
+<span>STN-B</span>
+<span>STN-C</span>
+<span>STN-D</span>
+</div>
+<!-- Tracks & Trains -->
+<div class="ml-[50px] h-full relative">
+<!-- Track Line 1 -->
+<div class="absolute top-[10%] left-0 w-full h-[3px] bg-slate-300"></div>
+<div class="absolute top-[10%] left-[20%] -translate-y-1/2 bg-blue-600 text-white font-data-mono-sm text-data-mono-sm px-xs py-[2px] rounded-base">T-12005</div>
+<!-- Track Line 2 -->
+<div class="absolute top-[40%] left-0 w-full h-[3px] bg-slate-300"></div>
+<div class="absolute top-[40%] left-[50%] -translate-y-1/2 bg-green-500 text-white font-data-mono-sm text-data-mono-sm px-xs py-[2px] rounded-base">T-08441</div>
+<!-- Track Line 3 (Conflict) -->
+<div class="absolute top-[70%] left-0 w-[60%] h-[3px] bg-slate-300"></div>
+<div class="absolute top-[70%] left-[60%] w-[20%] h-[3px] bg-red-600 animate-pulse-red"></div>
+<div class="absolute top-[70%] left-[80%] w-[20%] h-[3px] bg-slate-300"></div>
+<div class="absolute top-[70%] left-[55%] -translate-y-1/2 bg-amber-500 text-white font-data-mono-sm text-data-mono-sm px-xs py-[2px] rounded-base">T-12127</div>
+<div class="absolute top-[70%] left-[75%] -translate-y-1/2 bg-red-600 text-white font-data-mono-sm text-data-mono-sm px-xs py-[2px] rounded-base">T-0992X</div>
+</div>
+</div>
+</div>
+<!-- Zone 2: Action Queue -->
+<div class="w-[40%] bg-surface-container-lowest border border-slate-300 rounded-base flex flex-col overflow-hidden">
+<div class="h-[28px] border-b border-slate-200 flex items-center justify-between px-sm bg-slate-50">
+<span class="font-panel-header text-panel-header">AI INTERVENTIONS</span>
+<span class="font-data-mono-sm text-data-mono-sm bg-slate-200 px-xs rounded-base text-slate-700">3 PENDING</span>
+</div>
+<div class="flex-1 overflow-y-auto p-sm flex flex-col gap-sm bg-slate-100">
+<!-- Action Card: Critical -->
+<div class="bg-white border border-slate-300 rounded-base relative pl-[15px] p-md">
+<div class="absolute left-0 top-0 bottom-0 w-[3px] bg-red-600"></div>
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-red-600 uppercase">CRITICAL CONFLICT</span>
+<span class="font-data-mono-sm text-data-mono-sm bg-red-50 text-red-600 border border-red-200 px-xs py-[2px] rounded-base">-12 min delay</span>
+</div>
+<p class="font-panel-header text-panel-header text-slate-900 mb-xs">Hold Train 12127 at Station LNL</p>
+<p class="font-body-base text-body-base text-slate-500 mb-md leading-snug">Projected routing collision on Block 4. Holding T-12127 allows priority freight T-0992X to clear the single-line segment.</p>
+<div class="flex gap-sm">
+<button class="h-[30px] px-md bg-blue-600 text-white font-label-caps text-label-caps rounded-base hover:bg-blue-700 transition-colors">EXECUTE</button>
+<button class="h-[30px] px-md bg-white border border-slate-300 text-slate-900 font-label-caps text-label-caps rounded-base hover:bg-slate-50 transition-colors">OVERRIDE</button>
+</div>
+</div>
+<!-- Action Card: Warning -->
+<div class="bg-white border border-slate-300 rounded-base relative pl-[15px] p-md">
+<div class="absolute left-0 top-0 bottom-0 w-[3px] bg-amber-500"></div>
+<div class="flex justify-between items-start mb-sm">
+<span class="font-label-caps text-label-caps text-amber-600 uppercase">SPEED ADVISORY</span>
+<span class="font-data-mono-sm text-data-mono-sm bg-amber-50 text-amber-600 border border-amber-200 px-xs py-[2px] rounded-base">+4 min slack</span>
+</div>
+<p class="font-panel-header text-panel-header text-slate-900 mb-xs">Reduce T-08441 to 60km/h</p>
+<p class="font-body-base text-body-base text-slate-500 mb-md leading-snug">Approaching maintenance zone MZ-2. Gradual deceleration minimizes energy consumption while meeting scheduled arrival.</p>
+<div class="flex gap-sm">
+<button class="h-[30px] px-md bg-blue-600 text-white font-label-caps text-label-caps rounded-base hover:bg-blue-700 transition-colors">EXECUTE</button>
+<button class="h-[30px] px-md bg-white border border-slate-300 text-slate-900 font-label-caps text-label-caps rounded-base hover:bg-slate-50 transition-colors">DISMISS</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Zone 3: Train Register -->
+<div class="h-[35%] bg-surface-container-lowest border border-slate-300 rounded-base flex flex-col overflow-hidden">
+<div class="h-[28px] border-b border-slate-300 flex items-center px-sm bg-slate-100 font-label-caps text-label-caps text-slate-500 uppercase tracking-[0.07em]">
+<div class="w-[15%]">TRAIN ID</div>
+<div class="w-[15%]">TYPE</div>
+<div class="w-[20%]">SECTION</div>
+<div class="w-[15%]">SPEED</div>
+<div class="w-[15%]">DELAY</div>
+<div class="w-[20%]">AI CONFIDENCE</div>
+</div>
+<div class="flex-1 overflow-y-auto">
+<!-- Row 1 -->
+<div class="flex items-center px-sm h-row-height-dense border-b border-slate-200 bg-white font-data-mono text-data-mono text-slate-900">
+<div class="w-[15%]">T-12005</div>
+<div class="w-[15%] text-slate-500">PAX-EXP</div>
+<div class="w-[20%]">SEC_A-01</div>
+<div class="w-[15%]">120 km/h</div>
+<div class="w-[15%] text-slate-500">+0m</div>
+<div class="w-[20%] text-slate-500">99.2%</div>
+</div>
+<!-- Row 2 -->
+<div class="flex items-center px-sm h-row-height-dense border-b border-slate-200 bg-slate-50 font-data-mono text-data-mono text-slate-900">
+<div class="w-[15%]">T-08441</div>
+<div class="w-[15%] text-slate-500">FRT-HVY</div>
+<div class="w-[20%]">SEC_B-04</div>
+<div class="w-[15%]">85 km/h</div>
+<div class="w-[15%] text-amber-600 bg-amber-50 px-xs py-[2px] rounded-base inline-block w-max">-2m</div>
+<div class="w-[20%] text-slate-500">94.5%</div>
+</div>
+<!-- Row 3 (Critical) -->
+<div class="flex items-center px-sm h-row-height-dense border-b border-slate-200 bg-red-50 font-data-mono text-data-mono text-slate-900">
+<div class="w-[15%] font-data-mono-bold text-data-mono-bold">T-12127</div>
+<div class="w-[15%] text-slate-500">PAX-LOC</div>
+<div class="w-[20%] font-data-mono-bold text-data-mono-bold">SEC_C-09</div>
+<div class="w-[15%]">0 km/h</div>
+<div class="w-[15%] text-red-600 bg-white px-xs py-[2px] border border-red-200 rounded-base inline-block w-max">-12m</div>
+<div class="w-[20%] text-slate-500">88.1%</div>
+</div>
+<!-- Row 4 -->
+<div class="flex items-center px-sm h-row-height-dense border-b border-slate-200 bg-white font-data-mono text-data-mono text-slate-900">
+<div class="w-[15%]">T-0992X</div>
+<div class="w-[15%] text-slate-500">FRT-PRI</div>
+<div class="w-[20%]">SEC_C-10</div>
+<div class="w-[15%]">60 km/h</div>
+<div class="w-[15%] text-slate-500">+1m</div>
+<div class="w-[20%] text-slate-500">97.8%</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+<!-- Zone 4: Scenario Lab (Floating Modal) -->
+<div class="fixed bottom-[60px] right-[16px] w-[320px] bg-white border border-slate-300 rounded-base shadow-none z-50 flex flex-col">
+<div class="h-[28px] border-b border-slate-200 flex items-center justify-between px-sm bg-slate-50">
+<span class="font-panel-header text-panel-header">SCENARIO LAB</span>
+<button class="text-slate-500 hover:text-slate-900"><span class="material-symbols-outlined text-[16px]">close</span></button>
+</div>
+<div class="p-md flex flex-col gap-md">
+<div>
+<label class="block font-label-caps text-label-caps text-slate-500 mb-xs uppercase tracking-[0.07em]">TEST PARAMETER</label>
+<input class="w-full h-[28px] border border-slate-300 rounded-base px-sm font-data-mono-sm text-data-mono-sm text-slate-900 focus:border-blue-600 focus:ring-0 outline-none" type="text" value="Signal Red at BLK_1"/>
+</div>
+<div class="border border-slate-200 rounded-base overflow-hidden">
+<div class="flex border-b border-slate-200 bg-slate-50 font-label-caps text-label-caps text-slate-500 text-center">
+<div class="w-1/2 p-xs border-r border-slate-200">CURRENT</div>
+<div class="w-1/2 p-xs">SIMULATED</div>
+</div>
+<div class="flex text-center font-data-mono text-data-mono bg-white">
+<div class="w-1/2 p-sm border-r border-slate-200">
+<div class="text-slate-500 text-[10px]">THROUGHPUT</div>
+<div>98%</div>
+</div>
+<div class="w-1/2 p-sm">
+<div class="text-slate-500 text-[10px]">THROUGHPUT</div>
+<div class="text-amber-600">92%</div>
+</div>
+</div>
+</div>
+<button class="w-full h-[30px] bg-slate-900 text-white font-label-caps text-label-caps rounded-base hover:bg-slate-800 transition-colors">RUN SIMULATION</button>
+</div>
+</div>
+<!-- Footer -->
+<footer class="bg-surface-dim dark:bg-surface-dim fixed bottom-0 w-full h-row-height-dense border-t border-outline-variant flex justify-between items-center px-lg w-full z-50">
+<span class="font-data-mono-sm text-data-mono-sm text-on-surface-variant">TrackMind v2.4.1 | System Health: Nominal</span>
+<div class="flex gap-lg">
+<span class="font-data-mono-sm text-data-mono-sm text-on-surface-variant">Session: 04:22:15</span>
+<a class="font-data-mono-sm text-data-mono-sm text-on-surface-variant hover:text-primary transition-colors" href="#">Log Out</a>
+</div>
+</footer>
+</body></html>

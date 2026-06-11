@@ -260,91 +260,127 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
   if (predictions.length === 0) {
     return (
       <div
-        className="rounded-xl flex flex-col items-center justify-center py-32 gap-4"
-        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          gap: 16,
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-panel)',
+          borderRadius: 2,
+        }}
       >
-        <div style={{ fontSize: '3rem' }}>📡</div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth={1} style={{ width: 40, height: 40 }}>
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
         <div style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
-          <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>No prediction data</div>
-          <div className="text-sm mt-1">Start a simulation to generate ML forecasts</div>
+          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>No prediction data</div>
+          <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-faint)' }}>Start a simulation to generate ML forecasts</div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── Network summary row ────────────────────────────────────────── */}
-      <div
-        className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl"
-        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-      >
-        <div className="flex flex-col items-center gap-1">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Network summary row ─────────────────────────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: 4,
+        padding: '8px 12px',
+        background: 'var(--bg-surface)',
+        border: '1px solid var(--border-panel)',
+        borderRadius: 2,
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <RiskGauge score={avgConflictProb} label="Avg Conflict Risk" />
         </div>
-        <div className="flex flex-col items-center gap-1">
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
           <RiskGauge score={Math.min(avgDelay / 30, 1)} label="Avg Delay Risk" />
         </div>
-        <div
-          className="flex flex-col items-center justify-center gap-2 rounded-lg p-3"
-          style={{ background: 'var(--surface-2)' }}
-        >
-          <div className="text-2xl font-heading font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          borderRadius: 2,
+          padding: 8,
+          background: 'var(--bg-row-alt)',
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
             {predictions.filter((p) => p.conflict_probability > 0.7).length}
           </div>
-          <div className="text-xs text-center" style={{ color: 'var(--danger)' }}>High Risk Trains</div>
+          <div style={{ fontSize: 11, color: 'var(--danger)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>High Risk Trains</div>
         </div>
-        <div
-          className="flex flex-col items-center justify-center gap-2 rounded-lg p-3"
-          style={{ background: 'var(--surface-2)' }}
-        >
-          <div className="text-2xl font-heading font-bold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 4,
+          borderRadius: 2,
+          padding: 8,
+          background: 'var(--bg-row-alt)',
+        }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>
             {avgDelay.toFixed(1)}m
           </div>
-          <div className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>Avg Forecast Delay</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-mono)' }}>Avg Forecast Delay</div>
         </div>
       </div>
 
-      {/* ── Main split layout ──────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── Main split layout ─────────────────────────────────── */}
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '220px 1fr', gap: 4, overflow: 'hidden', minHeight: 0 }}>
+
         {/* Train list */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-        >
-          <div
-            className="flex items-center justify-between px-3 py-3 border-b"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            <h3
-              className="text-sm font-semibold"
-              style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-heading)' }}
-            >
-              Train Forecast
-            </h3>
-            <span
-              className="text-xs px-2 py-0.5 rounded"
-              style={{
-                background: 'var(--surface-2)',
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          background: 'var(--bg-surface)',
+          border: '1px solid var(--border-panel)',
+          borderRadius: 2,
+          overflow: 'hidden',
+        }}>
+          {/* List header */}
+          <div className="section-header" style={{ justifyContent: 'space-between', padding: '0 10px', height: 28 }}>
+            <span>TRAIN FORECAST</span>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: 11,
+              fontWeight: 400,
+              opacity: 0.7,
+            }}>
               {predictions.length} trains
             </span>
           </div>
-
-          {/* Column headers */}
-          <div
-            className="flex items-center gap-2 px-3 py-2 text-xs"
-            style={{ color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', fontFamily: 'var(--font-mono)' }}
-          >
-            <span className="w-2" />
-            <span className="flex-1">Train / Delay</span>
-            <span>Risk %</span>
+          {/* Column sub-header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '0 8px',
+            height: 24,
+            background: 'var(--bg-row-alt)',
+            borderBottom: '1px solid var(--border)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 10,
+            fontWeight: 700,
+            color: 'var(--text-muted)',
+            letterSpacing: '0.07em',
+            flexShrink: 0,
+          }}>
+            <span style={{ width: 8 }} />
+            <span style={{ flex: 1 }}>TRAIN / DELAY</span>
+            <span>RISK %</span>
           </div>
 
-          <div className="overflow-y-auto p-2 flex flex-col gap-0.5" style={{ maxHeight: '60vh' }}>
+          <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0', display: 'flex', flexDirection: 'column', gap: 1 }}>
             {sortedPreds.map((pred) => (
               <TrainPredRow
                 key={pred.train_id}
@@ -358,7 +394,7 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
         </div>
 
         {/* Detail panel */}
-        <div className="lg:col-span-2">
+        <div style={{ overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
           <AnimatePresence mode="wait">
             {displayPred ? (
               <motion.div
@@ -367,75 +403,91 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
                 transition={{ duration: 0.18 }}
-                className="flex flex-col gap-4"
+                style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
               >
-                {/* Train header */}
-                <div
-                  className="rounded-xl p-4 flex items-center gap-4"
-                  style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                >
-                  <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 font-heading font-bold text-sm"
-                    style={{
-                      background: `${TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express']}22`,
-                      color: TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express'],
-                      border: `1px solid ${TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express']}44`,
-                    }}
-                  >
+                {/* Train header card */}
+                <div style={{
+                  padding: '10px 12px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-panel)',
+                  borderRadius: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                }}>
+                  {/* Train ID badge */}
+                  <div style={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    fontFamily: 'var(--font-mono)',
+                    fontWeight: 700,
+                    fontSize: 11,
+                    background: `${TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express']}22`,
+                    color: TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express'],
+                    border: `1px solid ${TRAIN_TYPE_COLORS[trains[displayPred.train_id]?.type ?? 'express']}44`,
+                  }}>
                     {displayPred.train_id.slice(0, 4)}
                   </div>
-                  <div className="flex-1">
-                    <div className="font-heading font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
                       Train {displayPred.train_id}
                     </div>
-                    <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    <div style={{ fontSize: 11, marginTop: 2, color: 'var(--text-muted)' }}>
                       {trains[displayPred.train_id]?.type?.replace(/_/g, ' ') ?? 'Unknown type'} &bull;{' '}
                       {trains[displayPred.train_id]?.current_location ?? 'Unknown location'}
                     </div>
                   </div>
-                  <div className="flex gap-4">
-                    <div className="text-center">
-                      <div
-                        className="text-xl font-bold"
-                        style={{
-                          color: displayPred.future_delay_min > 15 ? 'var(--danger)' : displayPred.future_delay_min > 5 ? 'var(--warning)' : 'var(--success)',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
+                  <div style={{ display: 'flex', gap: 16 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        fontSize: 18,
+                        color: displayPred.future_delay_min > 15 ? 'var(--safety-red)' : displayPred.future_delay_min > 5 ? 'var(--safety-amber)' : 'var(--safety-green)',
+                      }}>
                         +{displayPred.future_delay_min.toFixed(1)}m
                       </div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Forecast Delay</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Forecast Delay</div>
                     </div>
-                    <div className="text-center">
-                      <div
-                        className="text-xl font-bold"
-                        style={{
-                          color: displayPred.conflict_probability > 0.7 ? 'var(--danger)' : displayPred.conflict_probability > 0.4 ? 'var(--warning)' : 'var(--success)',
-                          fontFamily: 'var(--font-mono)',
-                        }}
-                      >
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 700,
+                        fontSize: 18,
+                        color: displayPred.conflict_probability > 0.7 ? 'var(--safety-red)' : displayPred.conflict_probability > 0.4 ? 'var(--safety-amber)' : 'var(--safety-green)',
+                      }}>
                         {(displayPred.conflict_probability * 100).toFixed(0)}%
                       </div>
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Conflict Risk</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Conflict Risk</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Metrics grid */}
-                <div
-                  className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 rounded-xl"
-                  style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                >
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 4,
+                  padding: '10px 12px',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-panel)',
+                  borderRadius: 2,
+                }}>
                   {[
                     {
                       label: 'Congestion Level',
                       value: `${(displayPred.congestion_level * 100).toFixed(0)}%`,
-                      color: displayPred.congestion_level > 0.7 ? 'var(--danger)' : 'var(--warning)',
+                      color: displayPred.congestion_level > 0.7 ? 'var(--safety-red)' : 'var(--safety-amber)',
                     },
                     {
                       label: 'Confidence',
                       value: `${(displayPred.confidence * 100).toFixed(0)}%`,
-                      color: displayPred.confidence > 0.7 ? 'var(--success)' : 'var(--warning)',
+                      color: displayPred.confidence > 0.7 ? 'var(--safety-green)' : 'var(--safety-amber)',
                     },
                     {
                       label: 'Current Delay',
@@ -445,37 +497,34 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
                     {
                       label: 'Speed',
                       value: `${trains[displayPred.train_id]?.speed_kmh?.toFixed(0) ?? '—'} km/h`,
-                      color: 'var(--secondary)',
+                      color: 'var(--safety-blue)',
                     },
                   ].map(({ label, value, color }) => (
-                    <div
-                      key={label}
-                      className="flex flex-col gap-1 p-3 rounded-lg"
-                      style={{ background: 'var(--surface-2)' }}
-                    >
-                      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</div>
-                      <div
-                        className="text-lg font-bold"
-                        style={{ color, fontFamily: 'var(--font-mono)' }}
-                      >
-                        {value}
-                      </div>
+                    <div key={label} style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                      padding: '8px 10px',
+                      borderRadius: 2,
+                      background: 'var(--bg-row-alt)',
+                    }}>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 16, fontWeight: 700, color }}>{value}</div>
                     </div>
                   ))}
                 </div>
 
                 {/* SHAP Chart */}
-                <div
-                  className="rounded-xl overflow-hidden"
-                  style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                >
+                <div style={{
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-panel)',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                }}>
                   {Object.keys(displayPred.shap_values).length > 0 ? (
                     <ShapChart shapValues={displayPred.shap_values} />
                   ) : (
-                    <div
-                      className="text-xs text-center py-6"
-                      style={{ color: 'var(--text-muted)' }}
-                    >
+                    <div style={{ fontSize: 11, textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)' }}>
                       SHAP values not available (analytic fallback active)
                     </div>
                   )}
@@ -494,13 +543,25 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
                 key="no-selection"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center py-32 gap-4 rounded-xl"
-                style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: '100%',
+                  minHeight: 200,
+                  gap: 12,
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border-panel)',
+                  borderRadius: 2,
+                }}
               >
-                <div style={{ fontSize: '2.5rem' }}>📊</div>
-                <div className="text-center" style={{ color: 'var(--text-muted)' }}>
-                  <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>Select a train</div>
-                  <div className="text-sm mt-1">View detailed ML forecast and SHAP explanations</div>
+                <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-faint)" strokeWidth={1} style={{ width: 40, height: 40 }}>
+                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                </svg>
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13 }}>Select a train</div>
+                  <div style={{ fontSize: 12, marginTop: 4 }}>View detailed ML forecast and SHAP explanations</div>
                 </div>
               </motion.div>
             )}

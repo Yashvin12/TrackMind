@@ -131,34 +131,38 @@ interface AppState {
   }) => void
 }
 
-// Merge incoming raw conflicts with existing LiveConflicts, preserving lifecycle state
+// Merge incoming raw conflicts with existing LiveConflicts, preserving lifecycle state.
+// Returns a tuple of { merged, newEvents } so callers can commit everything
+// in ONE atomic set() — no nested set() calls that cause render cascades.
 function mergeConflicts(
   existing: LiveConflict[],
   incoming: Conflict[],
-  addEvent: (e: HistoryEvent) => void
-): LiveConflict[] {
+): { merged: LiveConflict[]; newEvents: HistoryEvent[] } {
   const now = Date.now()
   const incomingMap = new Map(incoming.map((c) => [c.id, c]))
   const existingMap = new Map(existing.map((c) => [c.id, c]))
 
-  const result: LiveConflict[] = []
+  const merged: LiveConflict[] = []
+  const newEvents: HistoryEvent[] = []
 
-  // Process all incoming conflicts
+  // Process all incoming conflicts — upsert by id
   for (const raw of incoming) {
     const prev = existingMap.get(raw.id)
     if (!prev) {
-      // New conflict detected
-      const newLC: LiveConflict = { ...raw, lifecycle: 'DETECTED', detectedAt: now }
-      result.push(newLC)
-      addEvent({
+      // NEW conflict: append once
+      merged.push({ ...raw, lifecycle: 'DETECTED', detectedAt: now })
+      newEvents.push({
         id: `evt_${now}_${raw.id}`,
         timestamp: now,
         message: `Block conflict detected — ${raw.block_section}`,
         type: 'conflict_detected',
       })
     } else {
-      // Return existing reference if key fields haven't changed — prevents unnecessary re-renders
-      const lifecycle = prev.lifecycle === 'DETECTED' || prev.lifecycle === 'ACTIVE' ? prev.lifecycle : prev.lifecycle
+      // EXISTING conflict: update if any key field changed, otherwise reuse reference (no re-render)
+      const lifecycle =
+        prev.lifecycle === 'DETECTED' || prev.lifecycle === 'ACTIVE'
+          ? prev.lifecycle
+          : prev.lifecycle
       const sameEnough =
         prev.severity === raw.severity &&
         prev.time_to_conflict_min === raw.time_to_conflict_min &&
@@ -166,39 +170,32 @@ function mergeConflicts(
         prev.block_section === raw.block_section &&
         prev.lifecycle === lifecycle
 
-      if (sameEnough) {
-        result.push(prev)
-      } else {
-        result.push({
-          ...raw,
-          lifecycle,
-          detectedAt: prev.detectedAt,
-          resolvedAt: prev.resolvedAt,
-        })
-      }
+      merged.push(
+        sameEnough
+          ? prev  // reuse exact reference → React bails out of re-render
+          : { ...raw, lifecycle, detectedAt: prev.detectedAt, resolvedAt: prev.resolvedAt }
+      )
     }
   }
 
-  // Keep resolved conflicts that are still within the 10s grace window
+  // Transition vanished conflicts to RESOLVED (10 s grace window before ARCHIVED)
   for (const lc of existing) {
     if (!incomingMap.has(lc.id) && lc.lifecycle !== 'ARCHIVED') {
       if (lc.lifecycle !== 'RESOLVED' && lc.lifecycle !== 'RESOLVING') {
-        // Just transitioned to resolved
-        const resolvedLC: LiveConflict = { ...lc, lifecycle: 'RESOLVED', resolvedAt: now, resolved: true }
-        result.push(resolvedLC)
-        addEvent({
+        merged.push({ ...lc, lifecycle: 'RESOLVED', resolvedAt: now, resolved: true })
+        newEvents.push({
           id: `evt_${now}_res_${lc.id}`,
           timestamp: now,
           message: `Block conflict resolved — ${lc.block_section}`,
           type: 'conflict_resolved',
         })
       } else {
-        result.push(lc)
+        merged.push(lc)
       }
     }
   }
 
-  return result
+  return { merged, newEvents }
 }
 
 const WS_THROTTLE_MS = 500 // 2Hz
@@ -295,34 +292,45 @@ export const useStore = create<AppState>((set, get) => ({
     const elapsed = now - _lastWSFlush
 
     if (elapsed >= WS_THROTTLE_MS) {
-      // Flush immediately
+      // Flush immediately — ONE atomic set(), no nested set() calls
       set((s) => {
-        const addEvent = (e: HistoryEvent) =>
-          set((ss) => ({ conflictHistory: [e, ...ss.conflictHistory].slice(0, 50) }))
-
         const rawConflicts = payload.conflicts ?? s.conflicts
-        let updatedLive: LiveConflict[]
+        let updatedLive = s.liveConflicts
+        let appendedEvents: HistoryEvent[] = []
+
         if (payload.conflicts) {
-          const merged = mergeConflicts(s.liveConflicts, rawConflicts, addEvent)
+          // mergeConflicts now returns a plain data tuple — no side-effects
+          const { merged, newEvents } = mergeConflicts(s.liveConflicts, rawConflicts)
+
           // Reuse existing array if every element is reference-equal (nothing changed)
           const isIdentical =
             merged.length === s.liveConflicts.length &&
             merged.every((lc, i) => lc === s.liveConflicts[i])
           updatedLive = isIdentical ? s.liveConflicts : merged
-        } else {
-          updatedLive = s.liveConflicts
+          appendedEvents = newEvents
         }
 
         const newKpis = payload.kpis ?? s.kpis
         const kpisLastUpdated = newKpis && newKpis !== s.kpis ? now : s.kpisLastUpdated
-        const smoothedKpis = newKpis && (now - s.kpisLastUpdated > 5000 || !s.smoothedKpis || s.smoothedKpis.active_conflicts !== newKpis.active_conflicts)
-          ? newKpis
-          : s.smoothedKpis
+        const smoothedKpis =
+          newKpis &&
+          (now - s.kpisLastUpdated > 5000 ||
+            !s.smoothedKpis ||
+            s.smoothedKpis.active_conflicts !== newKpis.active_conflicts)
+            ? newKpis
+            : s.smoothedKpis
+
+        // Merge new history events into existing history in this same set() call
+        const updatedHistory =
+          appendedEvents.length > 0
+            ? [...appendedEvents, ...s.conflictHistory].slice(0, 50)
+            : s.conflictHistory
 
         return {
           trains:            payload.trains          ?? s.trains,
           conflicts:         rawConflicts,
           liveConflicts:     updatedLive,
+          conflictHistory:   updatedHistory,
           stationState:      payload.station_state   ?? s.stationState,
           blockOccupancy:    payload.block_occupancy ?? s.blockOccupancy,
           signalStates:      payload.signal_states   ?? s.signalStates,
@@ -337,9 +345,8 @@ export const useStore = create<AppState>((set, get) => ({
         }
       })
     } else {
-      // Queue for next flush
+      // Queue for next flush — only keep the latest payload (last-write-wins)
       set({ _pendingWSPayload: payload })
-      // Schedule a deferred flush
       const delay = WS_THROTTLE_MS - elapsed
       setTimeout(() => {
         const pending = get()._pendingWSPayload

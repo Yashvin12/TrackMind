@@ -270,50 +270,89 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
+      style={{
+        background: '#FFFFFF',
+        border: '1px solid #CBD5E1',
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-2.5 border-b"
-        style={{ borderColor: 'var(--border)' }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '7px 14px',
+          background: '#1A3057',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
       >
-        <div className="flex items-center gap-3">
-          <h2 className="font-heading font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h2 style={{
+            fontFamily: 'var(--font-mono)',
+            fontWeight: 700,
+            fontSize: '0.72rem',
+            letterSpacing: '0.07em',
+            color: 'rgba(255,255,255,0.85)',
+            textTransform: 'uppercase',
+            margin: 0,
+          }}>
             Time-Space Diagram
           </h2>
-          <div className="flex items-center gap-2 text-xs" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'rgba(255,255,255,0.45)' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ display: 'inline-block', width: 14, height: 2, background: 'var(--secondary)', borderRadius: 1 }} />
+              <span style={{ display: 'inline-block', width: 14, height: 2, background: 'rgba(255,255,255,0.5)', borderRadius: 1 }} />
               actual
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: '2px dashed var(--secondary)' }} />
+              <span style={{ display: 'inline-block', width: 14, height: 0, borderTop: '2px dashed rgba(255,255,255,0.4)' }} />
               forecast
             </span>
           </div>
           {selectedTrainId && (
             <span
-              className="text-xs px-2 py-0.5 rounded"
-              style={{ background: 'var(--accent)18', border: '1px solid var(--accent)44', color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
+              style={{
+                fontSize: '0.62rem',
+                padding: '1px 7px',
+                borderRadius: 2,
+                background: 'rgba(30,90,168,0.35)',
+                border: '1px solid rgba(59,130,246,0.4)',
+                color: '#93C5FD',
+                fontFamily: 'var(--font-mono)',
+              }}
             >
               {selectedTrainId} selected
             </span>
           )}
         </div>
-        <div className="flex gap-2 items-center">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {conflictCount > 0 && (
             <span
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: 'var(--danger)18', border: '1px solid var(--danger)44', color: 'var(--danger)', fontFamily: 'var(--font-mono)' }}
+              style={{
+                fontSize: '0.62rem',
+                padding: '2px 8px',
+                borderRadius: 2,
+                background: 'rgba(220,38,38,0.2)',
+                border: '1px solid rgba(220,38,38,0.4)',
+                color: '#FCA5A5',
+                fontFamily: 'var(--font-mono)',
+              }}
             >
               {conflictCount} conflict{conflictCount !== 1 ? 's' : ''}
             </span>
           )}
           {crossings.length > 0 && (
             <span
-              className="text-xs px-2 py-1 rounded"
-              style={{ background: 'var(--warning)18', border: '1px solid var(--warning)44', color: 'var(--warning)', fontFamily: 'var(--font-mono)' }}
+              style={{
+                fontSize: '0.62rem',
+                padding: '2px 8px',
+                borderRadius: 2,
+                background: 'rgba(217,119,6,0.18)',
+                border: '1px solid rgba(217,119,6,0.35)',
+                color: '#FCD34D',
+                fontFamily: 'var(--font-mono)',
+              }}
             >
               {crossings.length} crossing{crossings.length !== 1 ? 's' : ''}
             </span>
@@ -322,12 +361,12 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
             <button
               onClick={() => setSelectedTrainId(null)}
               style={{
-                fontSize: '0.65rem',
+                fontSize: '0.62rem',
                 padding: '2px 8px',
-                borderRadius: 4,
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                background: 'var(--surface-2)',
+                borderRadius: 2,
+                border: '1px solid rgba(255,255,255,0.2)',
+                color: 'rgba(255,255,255,0.5)',
+                background: 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}
@@ -339,7 +378,7 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
       </div>
 
       {/* SVG Stringline */}
-      <div className="overflow-x-auto">
+      <div style={{ overflowX: 'auto' }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
@@ -351,40 +390,76 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
           <defs>
             {/* Glow for hover/selected — only applied on demand */}
             <filter id="ts-glow-sel" x="-80%" y="-80%" width="260%" height="260%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="ts-glow-conflict" x="-100%" y="-100%" width="300%" height="300%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="ts-glow-cross" x="-60%" y="-60%" width="220%" height="220%">
               <feGaussianBlur stdDeviation="2" result="blur" />
               <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
             </filter>
-
-            {/* Delay heat gradient */}
-            <linearGradient id="delay-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%"   stopColor="#FFB547" stopOpacity="0" />
-              <stop offset="60%"  stopColor="#FF5757" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="#FF5757" stopOpacity="0.22" />
-            </linearGradient>
+            <filter id="ts-glow-conflict" x="-100%" y="-100%" width="300%" height="300%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
 
             {/* Clip to chart area */}
             <clipPath id="ts-clip">
               <rect x={PAD.left} y={PAD.top} width={chartW} height={chartH} />
             </clipPath>
+
+            {/* Expanding ring animation for crossings */}
+            <style>{`
+              @keyframes ring-expand {
+                0%   { r: 4; opacity: 0.9; }
+                70%  { r: 10; opacity: 0.2; }
+                100% { r: 12; opacity: 0; }
+              }
+            `}</style>
           </defs>
 
-          {/* ── Background ─────────────────────────────────────────────────── */}
-          <rect x={PAD.left} y={PAD.top} width={chartW} height={chartH} fill="var(--bg-surface)" rx={4} />
+          {/* ── Chart Background (white) */}
+          <rect x={PAD.left} y={PAD.top} width={chartW} height={chartH} fill="#FFFFFF" />
 
-          {/* Past shading */}
+          {/* ── Background grid: faint horizontal lines at each station */}
+          {stations.map((s, i) => {
+            const km = stationKms[i]
+            const y  = kmToY(km)
+            return (
+              <line key={`hgrid-${s}`}
+                x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
+                stroke="#CBD5E1" strokeWidth={0.5} opacity={0.6}
+              />
+            )
+          })}
+
+          {/* ── Background grid: faint vertical time lines */}
+          {timeLabels.map(({ label, x, isNow }) => {
+            if (x < PAD.left || x > W - PAD.right) return null
+            return (
+              <line key={`vgrid-${label}`}
+                x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom}
+                stroke={isNow ? '#1E5AA8' : '#E2E8F0'}
+                strokeWidth={isNow ? 1 : 0.5}
+                opacity={isNow ? 0.7 : 1}
+              />
+            )
+          })}
+
+          {/* ── Past shading (light slate, not dark) */}
           <rect
             x={PAD.left} y={PAD.top}
             width={Math.max(0, nowX - PAD.left)} height={chartH}
-            fill="rgba(14,22,48,0.45)"
+            fill="rgba(241,245,249,0.7)"
           />
+
+          {/* ── Y-axis label: Distance / Stations */}
+          <text
+            x={PAD.left - 55}
+            y={PAD.top + chartH / 2}
+            textAnchor="middle"
+            fontSize={7.5}
+            fill="#64748B"
+            fontFamily="IBM Plex Mono, monospace"
+            transform={`rotate(-90, ${PAD.left - 55}, ${PAD.top + chartH / 2})`}
+          >
+            Distance (km) ↑
+          </text>
 
           {/* ── Grid: station horizontal lines ─────────────────────────────── */}
           {stations.map((s, i) => {
@@ -394,12 +469,12 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
               <g key={s}>
                 <line
                   x1={PAD.left} y1={y} x2={W - PAD.right} y2={y}
-                  stroke="var(--border)" strokeWidth={1} strokeDasharray="3 5" opacity={0.55}
+                  stroke="#CBD5E1" strokeWidth={0.75} strokeDasharray="4 6" opacity={0.7}
                 />
                 <text
                   x={PAD.left - 6} y={y + 4}
                   textAnchor="end" fontSize={8}
-                  fill="var(--secondary)"
+                  fill="#475569"
                   fontFamily="IBM Plex Mono, monospace" fontWeight="600"
                 >
                   {s}
@@ -407,7 +482,7 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
                 <text
                   x={PAD.left - 6} y={y + 14}
                   textAnchor="end" fontSize={5.5}
-                  fill="var(--text-muted)"
+                  fill="#94A3B8"
                   fontFamily="Inter, sans-serif"
                 >
                   {STATION_FULL[s] ?? s}
@@ -416,22 +491,15 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
             )
           })}
 
-          {/* ── Grid: time vertical lines ───────────────────────────────────── */}
+          {/* ── Grid: time vertical lines + X-axis labels ───────────────────── */}
           {timeLabels.map(({ label, x, isNow }) => {
             if (x < PAD.left || x > W - PAD.right) return null
             return (
               <g key={label}>
-                <line
-                  x1={x} y1={PAD.top} x2={x} y2={H - PAD.bottom}
-                  stroke={isNow ? 'var(--accent)' : 'var(--border)'}
-                  strokeWidth={isNow ? 1.5 : 0.75}
-                  strokeDasharray={isNow ? undefined : '3 5'}
-                  opacity={isNow ? 0.85 : 0.4}
-                />
                 <text
                   x={x} y={H - PAD.bottom + 13}
                   textAnchor="middle" fontSize={7.5}
-                  fill={isNow ? 'var(--accent)' : 'var(--text-muted)'}
+                  fill={isNow ? '#1E5AA8' : '#94A3B8'}
                   fontFamily="IBM Plex Mono, monospace"
                   fontWeight={isNow ? '700' : '400'}
                 >
@@ -440,6 +508,18 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
               </g>
             )
           })}
+
+          {/* X-axis label */}
+          <text
+            x={W - PAD.right}
+            y={H - PAD.bottom + 26}
+            textAnchor="end"
+            fontSize={7}
+            fill="#94A3B8"
+            fontFamily="IBM Plex Mono, monospace"
+          >
+            Time →
+          </text>
 
           {/* ── LAYER 1: Delay heat band ─────────────────────────────────────── */}
           <g clipPath="url(#ts-clip)">
@@ -565,7 +645,7 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
             })}
           </g>
 
-          {/* ── LAYER 3: Crossing nodes (replace diamonds) ──────────────────── */}
+          {/* ── LAYER 3: Crossing nodes — expanding ring animation ──────────── */}
           <g clipPath="url(#ts-clip)">
             {crossings.map(({ pt, trainA, trainB }, i) => {
               const isRelated = activeTrainId === trainA || activeTrainId === trainB
@@ -574,24 +654,33 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
               const label = `×${parseInt(minsFromNow) > 0 ? '+' : ''}${minsFromNow}m`
               return (
                 <g key={`cross-${i}`} opacity={isRelated ? 1 : 0.35}>
-                  {/* Outer ring */}
+                  {/* Expanding ring — SVG animation via CSS */}
+                  <circle
+                    cx={pt.x} cy={pt.y} r={4}
+                    fill="none"
+                    stroke="#D97706"
+                    strokeWidth={1.5}
+                    style={{ animation: 'ring-expand 2s ease-out infinite' }}
+                  />
+                  {/* Static outer ring */}
                   <circle
                     cx={pt.x} cy={pt.y} r={5}
                     fill="none"
-                    stroke="#FFB547"
+                    stroke="#D97706"
                     strokeWidth={1.2}
-                    filter={isRelated ? 'url(#ts-glow-cross)' : undefined}
+                    opacity={0.5}
                   />
                   {/* Center dot */}
-                  <circle cx={pt.x} cy={pt.y} r={2} fill="#FFB547" />
-                  {/* Crossing time label — only when related */}
+                  <circle cx={pt.x} cy={pt.y} r={2} fill="#D97706" />
+                  {/* Time label — only when related */}
                   {isRelated && (
                     <text
-                      x={pt.x} y={pt.y - 8}
+                      x={pt.x} y={pt.y - 10}
                       textAnchor="middle"
                       fontSize={6}
-                      fill="#FFB547"
+                      fill="#D97706"
                       fontFamily="IBM Plex Mono, monospace"
+                      fontWeight="700"
                       style={{ pointerEvents: 'none' }}
                     >
                       {label}

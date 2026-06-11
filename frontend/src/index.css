@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -92,7 +92,8 @@
     /* ── Fonts ──────────────────────────────────────────────────────────── */
     --font-heading:     'IBM Plex Sans', sans-serif;
     --font-body:        'IBM Plex Sans', sans-serif;
-    --font-mono:        'IBM Plex Mono', monospace;
+    /* JetBrains Mono — CRITICAL per DESIGN.md for all telemetry/train IDs/timestamps */
+    --font-mono:        'JetBrains Mono', 'IBM Plex Mono', monospace;
 
     /* ── Layout Dimensions ──────────────────────────────────────────────── */
     --header-h:         44px;
@@ -101,7 +102,8 @@
     --register-h:       200px;
     --register-min-h:   36px;
     --register-max-h:   420px;
-    --row-h:            34px;
+    /* DESIGN.md: 28px dense row height for train register */
+    --row-h:            28px;
 
     /* ── Transitions ────────────────────────────────────────────────────── */
     --transition-fast:  100ms ease;
@@ -591,15 +593,57 @@
   .card {
     background: var(--bg-surface);
     border: 1px solid var(--border-panel);
-    border-radius: 4px;
+    /* DESIGN.md: 2px universal radius — "machined" look */
+    border-radius: 2px;
     padding: 0.75rem;
   }
   .card-elevated {
     background: var(--bg-surface);
     border: 1px solid var(--border-strong);
-    border-radius: 4px;
+    border-radius: 2px;
     padding: 0.75rem;
-    box-shadow: 0 1px 3px rgba(15,38,83,0.07);
+    /* DESIGN.md: no drop shadows — flat tonal layering only */
+    box-shadow: none;
+  }
+
+  /* ── Action Cards (AI Inspector / Conflict Queue) ────────────────────────── */
+  /* DESIGN.md: 3px thick vertical bar on left edge, 12px internal padding */
+  .action-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-panel);
+    border-radius: 2px;
+    position: relative;
+    padding: 10px 12px 10px 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .action-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 2px 0 0 2px;
+  }
+  .action-card.critical::before { background: var(--safety-red); }
+  .action-card.major::before    { background: var(--safety-amber); }
+  .action-card.minor::before    { background: var(--safety-blue); }
+  .action-card.info::before     { background: var(--text-faint); }
+
+  /* ── Workspace Panel Header (generic) ───────────────────────────────────── */
+  .workspace-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg-panel);
+  }
+  .workspace-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 
   /* ── Operational Table ──────────────────────────────────────────────────── */
@@ -736,6 +780,40 @@
   .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 300ms ease; }
 
+  /* ── Canvas Grid Background (DESIGN.md: 12×12 Slate 200) ────────────────── */
+  .grid-bg {
+    background-size: 12px 12px;
+    background-image:
+      linear-gradient(to right, var(--border) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  }
+
+  /* ── Shimmer loading state ───────────────────────────────────────────────── */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      var(--bg-row-alt) 25%,
+      var(--border) 50%,
+      var(--bg-row-alt) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* ── Inline number badge (for KPI strip) ────────────────────────────────── */
+  .kpi-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 1px 7px;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+  }
+
   /* ── Legacy layout aliases (for backward compat during migration) ────────── */
   .ncc-map-area {
     flex: 1;
@@ -782,6 +860,21 @@
 @keyframes slide-in-left {
   from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: translateX(0); }
+}
+/* Used by WhatIfPanel's IndustrialSpinner and any loading indicators */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+/* Used by .shimmer loading skeleton */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+/* Urgency pulse for critical conflict bars */
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -1,8 +1,15 @@
 /**
- * WhatIfPanel — Scenario Lab
- * ==========================
- * Preset disruption scenarios with parameter sliders, running what-if
- * simulations and comparing KPI before/after.
+ * WhatIfPanel — Scenario Lab (Industrial Light Mode)
+ * ===================================================
+ * Split-view layout:
+ *  Left col:  Disruption type selector + parameter sliders
+ *  Right col: BEFORE KPI table (top) / AFTER KPI table (bottom)
+ *             Loading spinner replaces right panel during simulation.
+ *
+ * Design rules:
+ *  - bg-white panels, border border-slate-300, rounded-sm
+ *  - All numbers in font-mono
+ *  - No dark: classes, no shadows
  */
 
 import { useState } from 'react'
@@ -32,7 +39,7 @@ const DISRUPTION_TYPES: Array<{
     id: 'add_delay',
     label: 'Add Train Delay',
     icon: '⏱',
-    description: 'Simulate a delay for a specific train and observe propagation effects.',
+    description: 'Simulate a delay for a specific train and observe cascade propagation effects.',
     params: [
       { key: 'delay_min', label: 'Delay (min)', type: 'number', default: 15, min: 1, max: 120 },
       { key: 'train_id',  label: 'Train ID',   type: 'select', options: ['12127','11301','51421','77605','13401','12128','11302','51422','59661','92501'] },
@@ -70,7 +77,7 @@ const DISRUPTION_TYPES: Array<{
     id: 'weather_event',
     label: 'Weather Event',
     icon: '🌧',
-    description: 'Apply network-wide speed restrictions due to severe weather.',
+    description: 'Apply network-wide speed restrictions due to severe weather conditions.',
     params: [
       { key: 'speed_factor', label: 'Speed Factor', type: 'number', default: 0.6, min: 0.1, max: 1.0 },
       { key: 'delay_add',    label: 'Delay Add (min)',     type: 'number', default: 5, min: 1, max: 60 },
@@ -78,50 +85,164 @@ const DISRUPTION_TYPES: Array<{
   },
 ]
 
-// ── KPI Compare card ──────────────────────────────────────────────────────────
-function KPICompare({
-  label, before, after, delta, unit = '',
-}: {
+// KPI definitions for the before/after tables
+const KPI_ROWS: Array<{
+  key: keyof NonNullable<WhatIfResult>['before']
   label: string
-  before: number
-  after: number
-  delta: number
-  unit?: string
-}) {
-  const improved = delta < 0
-  const deltaColor = improved ? 'var(--success)' : delta > 0 ? 'var(--danger)' : 'var(--text-muted)'
+  unit: string
+  lowerIsBetter: boolean
+}> = [
+  { key: 'throughput_pct',       label: 'Throughput',        unit: '%',  lowerIsBetter: false },
+  { key: 'avg_delay_min',        label: 'Avg Delay',         unit: 'min', lowerIsBetter: true },
+  { key: 'trains_delayed',       label: 'Trains Delayed',    unit: '',   lowerIsBetter: true },
+  { key: 'active_conflicts',     label: 'Active Conflicts',  unit: '',   lowerIsBetter: true },
+  { key: 'block_utilization_pct', label: 'Block Utilization', unit: '%', lowerIsBetter: false },
+  { key: 'delay_reduction_pct',  label: 'Delay Reduction',   unit: '%',  lowerIsBetter: false },
+]
 
+// ── KPI Table ──────────────────────────────────────────────────────────────────
+function KPITable({
+  label,
+  data,
+  compare,
+  phase,
+}: {
+  label: 'BEFORE' | 'AFTER'
+  data: WhatIfResult['before'] | null
+  compare?: WhatIfResult['before'] | null
+  phase: 'before' | 'after'
+}) {
   return (
-    <div
-      className="rounded-lg p-3 flex flex-col gap-2"
-      style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-    >
-      <div className="text-xs" style={{ color: 'var(--text-muted)' }}>{label}</div>
-      <div className="flex items-end gap-2">
-        <div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>Before</div>
-          <div className="font-semibold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-            {typeof before === 'number' ? before.toFixed(1) : before}{unit}
-          </div>
+    <div style={{
+      flex: 1,
+      border: '1px solid #CBD5E1',
+      borderRadius: 2,
+      overflow: 'hidden',
+      background: '#FFFFFF',
+    }}>
+      {/* Table header bar */}
+      <div style={{
+        padding: '5px 12px',
+        background: phase === 'before' ? '#F1F5F9' : (label === 'AFTER' ? '#F0FDF4' : '#F1F5F9'),
+        borderBottom: '1px solid #CBD5E1',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+      }}>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.65rem',
+          fontWeight: 700,
+          letterSpacing: '0.07em',
+          color: phase === 'after' ? '#15803D' : '#475569',
+        }}>
+          {label}
+        </span>
+        {phase === 'after' && (
+          <span style={{ fontSize: '0.6rem', color: '#64748B', fontFamily: 'var(--font-mono)' }}>
+            — scenario result
+          </span>
+        )}
+      </div>
+
+      {/* Rows */}
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <tbody>
+          {KPI_ROWS.map(({ key, label: rowLabel, unit, lowerIsBetter }, i) => {
+            const val = data?.[key] ?? null
+            const compareVal = compare?.[key] ?? null
+            const delta = val !== null && compareVal !== null ? (val as number) - (compareVal as number) : null
+            // For "after" phase, compare against "before" (compareVal is before)
+            const improved = delta !== null && (lowerIsBetter ? delta < 0 : delta > 0)
+            const worsened = delta !== null && (lowerIsBetter ? delta > 0 : delta < 0)
+            const deltaColor = improved ? '#16A34A' : worsened ? '#DC2626' : '#64748B'
+            const deltaArrow = improved ? '↓' : worsened ? '↑' : '→'
+
+            return (
+              <tr key={key} style={{
+                borderBottom: i < KPI_ROWS.length - 1 ? '1px solid #F1F5F9' : undefined,
+                background: i % 2 === 0 ? '#FFFFFF' : '#FAFAFA',
+              }}>
+                <td style={{
+                  padding: '5px 12px',
+                  fontSize: '0.7rem',
+                  color: '#475569',
+                  width: '55%',
+                  borderRight: '1px solid #F1F5F9',
+                }}>
+                  {rowLabel}
+                </td>
+                <td style={{
+                  padding: '5px 12px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  color: '#1E293B',
+                  textAlign: 'right',
+                }}>
+                  {val !== null ? `${(val as number).toFixed(1)}${unit}` : '—'}
+                </td>
+                {phase === 'after' && delta !== null && (
+                  <td style={{
+                    padding: '5px 8px',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    color: deltaColor,
+                    textAlign: 'right',
+                    width: 60,
+                  }}>
+                    {deltaArrow} {Math.abs(delta).toFixed(1)}{unit}
+                  </td>
+                )}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Industrial Spinner ─────────────────────────────────────────────────────────
+function IndustrialSpinner() {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: 1,
+      gap: 14,
+      minHeight: 200,
+    }}>
+      <svg width={40} height={40} viewBox="0 0 40 40" style={{ animation: 'spin 1s linear infinite' }}>
+        <circle cx={20} cy={20} r={16} fill="none" stroke="#E2E8F0" strokeWidth={3} />
+        <circle cx={20} cy={20} r={16} fill="none" stroke="#1E5AA8" strokeWidth={3}
+          strokeDasharray="60 40" strokeLinecap="round" />
+      </svg>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          color: '#1E293B',
+          letterSpacing: '0.04em',
+          marginBottom: 4,
+        }}>
+          RUNNING SIMULATION
         </div>
-        <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth={1.5} className="w-3 h-3 mb-1">
-          <path d="M5 12h14M12 5l7 7-7 7" />
-        </svg>
-        <div>
-          <div className="text-xs" style={{ color: 'var(--text-muted)' }}>After</div>
-          <div className="font-semibold" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
-            {typeof after === 'number' ? after.toFixed(1) : after}{unit}
-          </div>
-        </div>
-        <div className="ml-auto">
-          <div
-            className="text-sm font-bold"
-            style={{ color: deltaColor, fontFamily: 'var(--font-mono)' }}
-          >
-            {delta >= 0 ? '+' : ''}{typeof delta === 'number' ? delta.toFixed(1) : delta}{unit}
-          </div>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.62rem',
+          color: '#94A3B8',
+        }}>
+          Computing optimal path…
         </div>
       </div>
+      <style>{`
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+      `}</style>
     </div>
   )
 }
@@ -138,7 +259,10 @@ export function WhatIfPanel({ result }: Props) {
     mutationFn: () => {
       const resolvedParams: Record<string, unknown> = {}
       for (const param of disruption.params) {
-        resolvedParams[param.key] = params[param.key] ?? (param.type === 'number' ? param.default : param.type === 'select' ? param.options[0] : '')
+        resolvedParams[param.key] = params[param.key] ?? (
+          param.type === 'number' ? param.default :
+          param.type === 'select' ? param.options[0] : ''
+        )
       }
       return whatifAPI.simulate(selectedType, resolvedParams).then((r) => r.data)
     },
@@ -159,106 +283,163 @@ export function WhatIfPanel({ result }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3 rounded-xl"
-        style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-      >
-        <div>
-          <h2
-            className="font-heading font-semibold text-sm"
-            style={{ color: 'var(--text-primary)' }}
-          >
-            Scenario Lab
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            Simulate disruptions and compare before/after KPIs
-          </p>
-        </div>
-        <span
-          className="text-xs px-2 py-1 rounded"
-          style={{
-            background: 'var(--warning)18',
-            border: '1px solid var(--warning)44',
-            color: 'var(--warning)',
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: '#F8FAFC' }}>
+
+      {/* Panel header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '7px 12px',
+        background: '#1A3057',
+        borderBottom: '1px solid rgba(255,255,255,0.08)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth={1.5} style={{ width: 13, height: 13 }}>
+            <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
+          </svg>
+          <span style={{
             fontFamily: 'var(--font-mono)',
-          }}
-        >
+            fontSize: '0.72rem',
+            fontWeight: 700,
+            letterSpacing: '0.07em',
+            color: 'rgba(255,255,255,0.85)',
+          }}>
+            SCENARIO LAB
+          </span>
+        </div>
+        <span style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.58rem',
+          fontWeight: 700,
+          letterSpacing: '0.05em',
+          background: 'rgba(217,119,6,0.25)',
+          border: '1px solid rgba(251,191,36,0.3)',
+          color: '#FCD34D',
+          padding: '1px 8px',
+          borderRadius: 2,
+        }}>
           SIMULATION MODE
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Left: Preset cards + params */}
-        <div className="flex flex-col gap-3">
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-          >
-            <div
-              className="px-3 py-2.5 border-b text-xs font-semibold"
-              style={{ color: 'var(--text-muted)', borderColor: 'var(--border)' }}
-            >
+      {/* Body: two columns */}
+      <div style={{
+        flex: 1,
+        overflow: 'hidden',
+        display: 'flex',
+        gap: 0,
+      }}>
+        {/* ── Left: Disruption type + parameters ── */}
+        <div style={{
+          width: 220,
+          flexShrink: 0,
+          borderRight: '1px solid #E2E8F0',
+          display: 'flex',
+          flexDirection: 'column',
+          overflowY: 'auto',
+          background: '#FFFFFF',
+        }}>
+          {/* Disruption type list */}
+          <div style={{
+            padding: '5px 8px 4px',
+            background: '#F8FAFC',
+            borderBottom: '1px solid #E2E8F0',
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              letterSpacing: '0.07em',
+              color: '#94A3B8',
+            }}>
               DISRUPTION TYPE
-            </div>
-            <div className="flex flex-col gap-0.5 p-2">
-              {DISRUPTION_TYPES.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => {
-                    setSelectedType(d.id)
-                    setParams({})
-                  }}
-                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all w-full"
-                  style={{
-                    background: selectedType === d.id ? 'var(--accent)12' : 'transparent',
-                    border: `1px solid ${selectedType === d.id ? 'var(--accent)44' : 'transparent'}`,
-                    transitionDuration: 'var(--transition-hover)',
-                  }}
-                >
-                  <span className="text-base flex-shrink-0">{d.icon}</span>
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: selectedType === d.id ? 'var(--accent)' : 'var(--text-primary)' }}
-                  >
-                    {d.label}
-                  </span>
-                </button>
-              ))}
-            </div>
+            </span>
           </div>
+          {DISRUPTION_TYPES.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => { setSelectedType(d.id); setParams({}) }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '8px 10px',
+                textAlign: 'left',
+                background: selectedType === d.id ? '#EFF6FF' : 'transparent',
+                borderBottom: '1px solid #F1F5F9',
+                border: 'none',
+                borderLeft: selectedType === d.id ? '3px solid #1E5AA8' : '3px solid transparent',
+                cursor: 'pointer',
+                width: '100%',
+                transition: 'all 100ms ease',
+              }}
+            >
+              <span style={{ fontSize: '0.85rem', flexShrink: 0 }}>{d.icon}</span>
+              <span style={{
+                fontSize: '0.72rem',
+                fontWeight: selectedType === d.id ? 600 : 400,
+                color: selectedType === d.id ? '#1E3A8A' : '#475569',
+                lineHeight: 1.3,
+              }}>
+                {d.label}
+              </span>
+            </button>
+          ))}
 
           {/* Parameters */}
-          <div
-            className="rounded-xl p-4 flex flex-col gap-3"
-            style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-          >
-            <div className="text-xs font-semibold" style={{ color: 'var(--text-muted)' }}>
+          <div style={{
+            padding: '8px 10px',
+            borderTop: '1px solid #E2E8F0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            flex: 1,
+          }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              letterSpacing: '0.07em',
+              color: '#94A3B8',
+            }}>
               PARAMETERS
-            </div>
-            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+            </span>
+            <p style={{ fontSize: '0.68rem', color: '#64748B', lineHeight: 1.5, margin: 0 }}>
               {disruption.description}
             </p>
             {disruption.params.map((param) => (
-              <div key={param.key} className="flex flex-col gap-1">
-                <label className="text-xs font-medium" style={{ color: 'var(--secondary)' }}>
+              <div key={param.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={{
+                  fontSize: '0.65rem',
+                  fontWeight: 600,
+                  color: '#334155',
+                  fontFamily: 'var(--font-mono)',
+                }}>
                   {param.label}
                 </label>
                 {param.type === 'number' ? (
-                  <div className="flex flex-col gap-1">
+                  <div>
                     <input
                       type="range"
                       min={param.min}
                       max={param.max}
+                      step={param.max <= 1 ? 0.05 : 1}
                       value={Number(getParamValue(param))}
                       onChange={(e) => handleParamChange(param.key, Number(e.target.value))}
-                      className="w-full"
-                      style={{ accentColor: 'var(--accent)' }}
+                      style={{ width: '100%', accentColor: '#1E5AA8' }}
                     />
-                    <div className="flex justify-between text-xs" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      fontSize: '0.6rem',
+                      color: '#94A3B8',
+                      fontFamily: 'var(--font-mono)',
+                      marginTop: 1,
+                    }}>
                       <span>{param.min}</span>
-                      <span className="font-bold" style={{ color: 'var(--accent)' }}>
+                      <span style={{ fontWeight: 700, color: '#1E5AA8' }}>
                         {getParamValue(param)}
                       </span>
                       <span>{param.max}</span>
@@ -268,12 +449,15 @@ export function WhatIfPanel({ result }: Props) {
                   <select
                     value={String(getParamValue(param))}
                     onChange={(e) => handleParamChange(param.key, e.target.value)}
-                    className="w-full px-2 py-1.5 rounded-lg text-xs"
                     style={{
-                      background: 'var(--surface-2)',
-                      border: '1px solid var(--border)',
-                      color: 'var(--text-primary)',
+                      width: '100%',
+                      padding: '3px 6px',
+                      fontSize: '0.7rem',
                       fontFamily: 'var(--font-mono)',
+                      border: '1px solid #CBD5E1',
+                      borderRadius: 2,
+                      background: '#FFFFFF',
+                      color: '#1E293B',
                     }}
                   >
                     {param.options.map((opt) => (
@@ -284,150 +468,159 @@ export function WhatIfPanel({ result }: Props) {
               </div>
             ))}
 
+            {/* Run button */}
             <button
               id="btn-run-whatif"
               onClick={() => runMutation.mutate()}
               disabled={runMutation.isPending}
-              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all"
               style={{
-                background: runMutation.isPending ? 'var(--surface-2)' : 'var(--accent)',
-                color: runMutation.isPending ? 'var(--text-muted)' : '#fff',
-                transitionDuration: 'var(--transition-hover)',
+                marginTop: 4,
+                padding: '8px 0',
+                fontSize: '0.7rem',
+                fontFamily: 'var(--font-mono)',
+                fontWeight: 700,
+                letterSpacing: '0.05em',
+                borderRadius: 2,
+                border: runMutation.isPending ? '1px solid #CBD5E1' : '1px solid #1E5AA8',
+                background: runMutation.isPending ? '#F1F5F9' : '#1E5AA8',
+                color: runMutation.isPending ? '#94A3B8' : '#FFFFFF',
+                cursor: runMutation.isPending ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                width: '100%',
+                transition: 'all 120ms ease',
               }}
             >
               {runMutation.isPending ? (
                 <>
-                  <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity={0.25} />
+                    <path fill="currentColor" opacity={0.75} d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                  Running simulation...
+                  RUNNING…
                 </>
               ) : (
                 <>
-                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width={12} height={12}>
                     <path d="M8 5v14l11-7z" />
                   </svg>
-                  Run Scenario
+                  RUN SCENARIO
                 </>
               )}
             </button>
 
             {runMutation.isError && (
-              <div
-                className="text-xs px-3 py-2 rounded-lg"
-                style={{ background: 'var(--danger)18', color: 'var(--danger)', border: '1px solid var(--danger)44' }}
-              >
+              <div style={{
+                padding: '6px 10px',
+                borderRadius: 2,
+                border: '1px solid #FECACA',
+                background: '#FEF2F2',
+                fontSize: '0.65rem',
+                color: '#DC2626',
+                fontFamily: 'var(--font-mono)',
+              }}>
                 Simulation failed. Is the backend running?
               </div>
             )}
           </div>
         </div>
 
-        {/* Right: Results */}
-        <div className="lg:col-span-2">
+        {/* ── Right: Before / After KPI split-view ── */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 0,
+          overflow: 'hidden',
+        }}>
           <AnimatePresence mode="wait">
-            {result ? (
+            {runMutation.isPending ? (
+              <motion.div
+                key="spinner"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: '#FFFFFF',
+                }}
+              >
+                <IndustrialSpinner />
+              </motion.div>
+            ) : result ? (
               <motion.div
                 key="results"
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2 }}
-                className="flex flex-col gap-4"
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}
               >
-                {/* Narrative */}
-                <div
-                  className="rounded-xl p-4"
-                  style={{ background: 'var(--surface-1)', border: '1px solid var(--accent)33' }}
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-base">🧠</span>
-                    <span
-                      className="text-xs font-semibold"
-                      style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
-                    >
-                      AI NARRATIVE
-                    </span>
-                  </div>
-                  <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>
-                    {result.narrative}
-                  </p>
-                  <div className="flex items-center gap-2 mt-3 text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <span>Affected trains:</span>
-                    <div className="flex gap-1 flex-wrap">
-                      {result.affected_trains.map((t) => (
-                        <span
-                          key={t}
-                          className="px-1.5 py-0.5 rounded"
-                          style={{ background: 'var(--surface-2)', fontFamily: 'var(--font-mono)', color: 'var(--secondary)' }}
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                {/* BEFORE section — top half */}
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  borderBottom: '2px solid #CBD5E1',
+                }}>
+                  <KPITable label="BEFORE" data={result.before} phase="before" />
                 </div>
 
-                {/* KPI Comparisons */}
-                <div
-                  className="rounded-xl p-4"
-                  style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-                >
-                  <div
-                    className="text-xs font-semibold mb-3"
-                    style={{ color: 'var(--text-muted)' }}
-                  >
-                    KPI IMPACT
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <KPICompare
-                      label="Average Delay"
-                      before={result.before?.avg_delay_min ?? 0}
-                      after={result.after?.avg_delay_min ?? 0}
-                      delta={result.delta?.avg_delay_min ?? 0}
-                      unit="m"
-                    />
-                    <KPICompare
-                      label="Active Conflicts"
-                      before={result.before?.active_conflicts ?? 0}
-                      after={result.after?.active_conflicts ?? 0}
-                      delta={result.delta?.active_conflicts ?? 0}
-                    />
-                    <KPICompare
-                      label="Throughput"
-                      before={result.before?.throughput_pct ?? 0}
-                      after={result.after?.throughput_pct ?? 0}
-                      delta={(result.after?.throughput_pct ?? 0) - (result.before?.throughput_pct ?? 0)}
-                      unit="%"
-                    />
-                    <KPICompare
-                      label="Trains Delayed"
-                      before={result.before?.trains_delayed ?? 0}
-                      after={result.after?.trains_delayed ?? 0}
-                      delta={result.delta?.trains_delayed ?? 0}
-                    />
-                    <KPICompare
-                      label="Block Utilization"
-                      before={result.before?.block_utilization_pct ?? 0}
-                      after={result.after?.block_utilization_pct ?? 0}
-                      delta={(result.after?.block_utilization_pct ?? 0) - (result.before?.block_utilization_pct ?? 0)}
-                      unit="%"
-                    />
-                    <KPICompare
-                      label="Delay Reduction"
-                      before={result.before?.delay_reduction_pct ?? 0}
-                      after={result.after?.delay_reduction_pct ?? 0}
-                      delta={(result.after?.delay_reduction_pct ?? 0) - (result.before?.delay_reduction_pct ?? 0)}
-                      unit="%"
-                    />
-                  </div>
+                {/* AFTER section — bottom half */}
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                }}>
+                  <KPITable label="AFTER" data={result.after} compare={result.before} phase="after" />
+                </div>
 
-                  <div
-                    className="text-xs text-right mt-3"
-                    style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-                  >
-                    Computed in {result.execution_time_ms?.toFixed(1)}ms
+                {/* Narrative + metadata footer */}
+                <div style={{
+                  padding: '6px 12px',
+                  background: '#F8FAFC',
+                  borderTop: '1px solid #E2E8F0',
+                  flexShrink: 0,
+                }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span style={{ fontSize: '0.75rem', flexShrink: 0 }}>🧠</span>
+                    <p style={{
+                      fontSize: '0.68rem',
+                      color: '#475569',
+                      lineHeight: 1.5,
+                      margin: 0,
+                      flex: 1,
+                    }}>
+                      {result.narrative}
+                    </p>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    marginTop: 5,
+                    fontSize: '0.6rem',
+                    color: '#94A3B8',
+                    fontFamily: 'var(--font-mono)',
+                  }}>
+                    <span>
+                      Affected:{' '}
+                      {result.affected_trains.map((t, i) => (
+                        <span key={t} style={{ color: '#64748B', marginLeft: i === 0 ? 0 : 4 }}>{t}</span>
+                      ))}
+                    </span>
+                    <span>Computed in {result.execution_time_ms?.toFixed(1)}ms</span>
                   </div>
                 </div>
               </motion.div>
@@ -436,21 +629,31 @@ export function WhatIfPanel({ result }: Props) {
                 key="empty"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="flex flex-col items-center justify-center gap-4 rounded-xl"
                 style={{
-                  background: 'var(--surface-1)',
-                  border: '1px solid var(--border)',
-                  minHeight: 400,
-                  color: 'var(--text-muted)',
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 10,
+                  background: '#FFFFFF',
+                  color: '#94A3B8',
                 }}
               >
-                <div style={{ fontSize: '3rem' }}>🔬</div>
-                <div className="text-center">
-                  <div className="font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    No scenario run yet
+                <div style={{ fontSize: '2.5rem', opacity: 0.4 }}>🔬</div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.72rem',
+                    fontWeight: 700,
+                    color: '#334155',
+                    letterSpacing: '0.04em',
+                    marginBottom: 4,
+                  }}>
+                    NO SCENARIO RUN YET
                   </div>
-                  <div className="text-sm mt-1">
-                    Select a disruption type and parameters, then click Run
+                  <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>
+                    Select a disruption type and parameters,<br />then click Run Scenario
                   </div>
                 </div>
               </motion.div>

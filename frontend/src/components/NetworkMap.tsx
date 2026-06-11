@@ -314,18 +314,17 @@ export function NetworkMap({ trains, stationState, blockOccupancy, signalStates,
           aria-label="Railway network occupancy map"
         >
           <defs>
-            {/* Conflict hatching pattern */}
-            <pattern id="conflict-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-              <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(220,38,38,0.25)" strokeWidth="3" />
-            </pattern>
-            {/* Subtle grid */}
+            {/* Subtle grid — slate-100 lines */}
             <pattern id="light-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E5E7EB" strokeWidth="0.5" />
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#F1F5F9" strokeWidth="0.5" />
             </pattern>
-            {/* Route lock dashes */}
-            <pattern id="route-lock" width="12" height="12" patternUnits="userSpaceOnUse">
-              <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(21,101,192,0.3)" strokeWidth="1.5" />
-            </pattern>
+            {/* Conflict dot pulse animation */}
+            <style>{`
+              @keyframes conflict-dot-pulse {
+                0%, 100% { r: 5; opacity: 0.9; }
+                50%       { r: 8; opacity: 0.5; }
+              }
+            `}</style>
           </defs>
 
           {/* Background grid */}
@@ -333,95 +332,110 @@ export function NetworkMap({ trains, stationState, blockOccupancy, signalStates,
 
           {/* ── Block sections ────────────────────────────────────────────── */}
           {BLOCKS.map(block => {
-            const fromX    = stationX(block.from, spacing)
-            const toX      = stationX(block.to, spacing)
-            const occupied = (blockOccupancy[block.id] ?? []).length > 0
-            const isConflict  = conflictBlocks.has(block.id)
+            const fromX      = stationX(block.from, spacing)
+            const toX        = stationX(block.to, spacing)
+            const occupied   = (blockOccupancy[block.id] ?? []).length > 0
+            const isConflict = conflictBlocks.has(block.id)
             const isFocusedBlk = block.id === focusedBlock
-            const blockFade = focusModeActive && !isFocusedBlk ? 0.15 : 1
-            const trackW   = block.type === 'double' ? 5 : 3.5
-            const midX     = (fromX + toX) / 2
+            const blockFade  = focusModeActive && !isFocusedBlk ? 0.15 : 1
+            const midX       = (fromX + toX) / 2
 
-            // Block fill color
-            const fillColor = isConflict ? 'rgba(220,38,38,0.08)'
-              : occupied ? 'rgba(217,119,6,0.07)'
-              : heatmap ? heatColor(block.id)
-              : 'transparent'
+            // Track stroke widths: double track = 2px rail bed, single = 1.5px
+            const trackW = block.type === 'double' ? 2 : 1.5
 
             const signalKey   = Object.keys(signalStates).find(k => k.includes(block.from) || k.includes(block.id))
             const signalState = signalKey ? signalStates[signalKey] : 'green'
 
+            // Color only the track LINE — no background fills for conflicts
+            const trackColor = isConflict ? '#DC2626'   // red-600, crisp
+              : occupied ? '#D97706'                    // amber-600
+              : '#1E5AA8'                               // IR blue (free)
+            const trackOpacity = isConflict ? 1 : occupied ? 0.8 : 0.45
+
+            // Heatmap only when enabled and not conflict
+            const bgFill = !isConflict && heatmap ? heatColor(block.id) : 'transparent'
+
             return (
               <g key={block.id} style={{ opacity: blockFade, transition: 'opacity 0.25s ease' }}>
-                {/* Block background band */}
+
+                {/* Optional heatmap tint (no conflict background) */}
                 <rect
                   x={fromX} y={CENTER_Y - DEPT_OFFSET - 20}
                   width={toX - fromX} height={DEPT_OFFSET * 2 + 40}
-                  fill={fillColor}
+                  fill={bgFill}
                 />
 
-                {/* Conflict hatching */}
-                {isConflict && (
-                  <rect
-                    x={fromX} y={CENTER_Y - DEPT_OFFSET - 20}
-                    width={toX - fromX} height={DEPT_OFFSET * 2 + 40}
-                    fill="url(#conflict-hatch)"
-                  />
-                )}
-
-                {/* Focus ring */}
+                {/* Focus ring — dashed rect around focused block */}
                 {isFocusedBlk && focusModeActive && (
                   <rect
                     x={fromX} y={CENTER_Y - DEPT_OFFSET - 24}
                     width={toX - fromX} height={DEPT_OFFSET * 2 + 48}
-                    fill="none" stroke="var(--safety-red)" strokeWidth={2}
-                    strokeDasharray="6 4" rx={3}
+                    fill="none" stroke="#DC2626" strokeWidth={1.5}
+                    strokeDasharray="6 4" rx={2}
                     style={{ animation: 'pulse-conflict 1.5s ease-in-out infinite' }}
                   />
                 )}
 
-                {/* Rails for each lane */}
+                {/* Track lines for each lane — crisp 2px strokes */}
                 {[...LANES.map(l => l.yOffset), DEPT_OFFSET].map(yOff => (
                   <g key={yOff}>
-                    {/* Rail bed */}
+                    {/* Rail bed (wider, light) */}
                     <line
                       x1={fromX} y1={CENTER_Y + yOff}
                       x2={toX}   y2={CENTER_Y + yOff}
-                      stroke={isConflict ? '#FCA5A5' : occupied ? '#FCD34D' : '#E5E7EB'}
-                      strokeWidth={trackW + 3}
+                      stroke={isConflict ? '#FCA5A5' : occupied ? '#FDE68A' : '#CBD5E1'}
+                      strokeWidth={trackW + 2}
                     />
-                    {/* Rail */}
+                    {/* Rail (sharp, colored) */}
                     <line
                       x1={fromX} y1={CENTER_Y + yOff}
                       x2={toX}   y2={CENTER_Y + yOff}
-                      stroke={isConflict ? 'var(--safety-red)' : occupied ? 'var(--safety-amber)' : 'var(--ir-blue)'}
+                      stroke={trackColor}
                       strokeWidth={trackW}
-                      opacity={isConflict ? 0.9 : occupied ? 0.7 : 0.5}
+                      opacity={trackOpacity}
+                      strokeLinecap="square"
                     />
                     {/* Flow animation on occupied/conflict */}
                     {(occupied || isConflict) && (
                       <line
                         x1={fromX} y1={CENTER_Y + yOff}
                         x2={toX}   y2={CENTER_Y + yOff}
-                        stroke={isConflict ? 'var(--safety-red)' : 'var(--safety-amber)'}
-                        strokeWidth={2}
-                        strokeDasharray="10 14"
-                        opacity={0.55}
-                        style={{ animation: `track-flow ${isConflict ? '0.6s' : '1s'} linear infinite` }}
+                        stroke={trackColor}
+                        strokeWidth={1.5}
+                        strokeDasharray="8 12"
+                        opacity={0.45}
+                        style={{ animation: `track-flow ${isConflict ? '0.5s' : '1.2s'} linear infinite` }}
                       />
                     )}
                   </g>
                 ))}
 
-                {/* Conflict warning label */}
+                {/* Pulsing 10px conflict dot at segment midpoint — center lane only */}
                 {isConflict && (
                   <g>
-                    <rect x={midX - 28} y={CENTER_Y - DEPT_OFFSET - 38} width={56} height={14} rx={2}
-                      fill="var(--safety-red)" opacity={0.9} />
-                    <text x={midX} y={CENTER_Y - DEPT_OFFSET - 28}
-                      textAnchor="middle" fontSize={7.5} fill="white"
-                      fontFamily="var(--font-heading)" fontWeight="700" letterSpacing="0.04em">
-                      ⚠ CONFLICT
+                    {/* Outer ring — expands on pulse */}
+                    <circle
+                      cx={midX} cy={CENTER_Y}
+                      r={10}
+                      fill="none"
+                      stroke="#DC2626"
+                      strokeWidth={1.5}
+                      opacity={0.5}
+                      style={{ animation: 'pulse-conflict 1.2s ease-in-out infinite' }}
+                    />
+                    {/* Solid dot */}
+                    <circle
+                      cx={midX} cy={CENTER_Y}
+                      r={5}
+                      fill="#DC2626"
+                      style={{ animation: 'conflict-dot-pulse 1.2s ease-in-out infinite' }}
+                    />
+                    {/* ⚠ label above dot */}
+                    <text x={midX} y={CENTER_Y - 16}
+                      textAnchor="middle" fontSize={7}
+                      fill="#DC2626" fontFamily="var(--font-mono)" fontWeight="700"
+                      letterSpacing="0.04em">
+                      CONFLICT
                     </text>
                   </g>
                 )}
@@ -429,7 +443,7 @@ export function NetworkMap({ trains, stationState, blockOccupancy, signalStates,
                 {/* Occupancy count */}
                 {occupied && !isConflict && (
                   <text x={midX} y={CENTER_Y - DEPT_OFFSET - 26}
-                    textAnchor="middle" fontSize={7} fill="var(--safety-amber)"
+                    textAnchor="middle" fontSize={7} fill="#D97706"
                     fontFamily="var(--font-mono)" fontWeight="700">
                     {(blockOccupancy[block.id] ?? []).length}T
                   </text>
@@ -440,7 +454,7 @@ export function NetworkMap({ trains, stationState, blockOccupancy, signalStates,
 
                 {/* Block type label */}
                 <text x={midX} y={SVG_H - 18}
-                  textAnchor="middle" fontSize={7} fill="var(--text-faint)"
+                  textAnchor="middle" fontSize={7} fill="#94A3B8"
                   fontFamily="var(--font-mono)">
                   {block.id} · {block.type}
                 </text>
