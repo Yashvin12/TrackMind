@@ -31,6 +31,7 @@ AsyncSessionLocal = async_sessionmaker(
 async def init_db() -> None:
     """Initialize database tables."""
     from app.models import railway  # noqa: F401 — registers models with Base
+    logger.warning("PRODUCTION RISK: Using Base.metadata.create_all() - Replace with Alembic migrations")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database initialized")
