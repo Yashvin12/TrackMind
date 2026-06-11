@@ -11,7 +11,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { conflictTypeLabel } from '../types/conflict'
 import { LiveConflict, ConflictLifecycle, HistoryEvent, PredictionEntry } from '../store/index'
 import { useStore } from '../store/index'
-import { AIExplainPanel } from './AIExplainPanel'
 import { Recommendation } from '../types/recommendation'
 
 interface Props {
@@ -90,7 +89,7 @@ function formatHHMM(ts: number): string {
 
 // ── Single conflict row ───────────────────────────────────────────────────────
 const ConflictRow = memo(function ConflictRow({
-  conflict, isSelected, onSelect, recommendation, onAccept, onOverride, predictions,
+  conflict, isSelected, onSelect, recommendation, onAccept, onOverride,
 }: {
   conflict: LiveConflict
   isSelected: boolean
@@ -274,7 +273,7 @@ const ConflictRow = memo(function ConflictRow({
               {/* Recommendation options (if available) */}
               {rec && rec.options.slice(0, 2).map(opt => (
                 <div key={opt.rank} style={{
-                  background: opt.rank === 1 ? 'var(--ir-blue-pale)' : 'white',
+                  background: opt.rank === 1 ? 'var(--ir-blue-pale)' : 'var(--bg-surface)',
                   border: `1px solid ${opt.rank === 1 ? 'var(--ir-blue-light)' : 'var(--border)'}`,
                   borderRadius: 3, padding: '7px 10px',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
@@ -282,53 +281,45 @@ const ConflictRow = memo(function ConflictRow({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
                       {opt.rank === 1 && (
-                        <span style={{ fontSize: '0.58rem', fontFamily: 'var(--font-mono)', fontWeight: 700,
+                        <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700,
                           color: 'var(--ir-blue)', background: 'var(--ir-blue-light)', padding: '1px 5px', borderRadius: 2 }}>
                           ★ TOP
                         </span>
                       )}
-                      <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                      <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
                         Option {opt.rank} · {opt.confidence} confidence
                       </span>
                     </div>
                     {opt.actions.slice(0, 2).map((a, i) => (
-                      <div key={i} style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginBottom: 1 }}>
+                      <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 1 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ir-blue)', marginRight: 5 }}>
                           {a.action_type.toUpperCase()} {a.train_id}
                         </span>
-                        {a.duration_min && <span style={{ color: 'var(--text-muted)' }}>for {a.duration_min}m</span>}
+                        {a.duration_min && <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>for {a.duration_min}m</span>}
                       </div>
                     ))}
                   </div>
                   <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
                     <button className="btn btn-accept"
-                      style={{ fontSize: '0.62rem', padding: '3px 10px' }}
+                      style={{ fontSize: 12, padding: '3px 10px' }}
                       onClick={() => onAccept?.(rec.id, opt.rank)}>
                       Apply
                     </button>
                     <button className="btn btn-sim"
-                      style={{ fontSize: '0.62rem', padding: '3px 8px' }}>
+                      style={{ fontSize: 12, padding: '3px 8px' }}>
                       Sim
                     </button>
                   </div>
                 </div>
               ))}
 
-              {/* AI explainability */}
-              <AIExplainPanel
-                conflictType={conflict.conflict_type}
-                severity={conflict.severity}
-                trains={trainIds}
-                predictions={predictions}
-                savedDelayMin={conflict.predicted_delay_min ? conflict.predicted_delay_min * 0.7 : undefined}
-                cascadeRiskMin={conflict.predicted_delay_min ? conflict.predicted_delay_min * 1.4 : undefined}
-              />
+              {/* Note: AI factor analysis has moved to the right Inspector panel */}
 
               {/* Override */}
               {!showOverride ? (
                 <button
                   className="btn btn-override"
-                  style={{ width: '100%', fontSize: '0.65rem', fontFamily: 'var(--font-heading)', letterSpacing: '0.04em' }}
+                  style={{ width: '100%', fontSize: 13, fontFamily: 'var(--font-heading)', letterSpacing: '0.04em' }}
                   onClick={() => setShowOverride(true)}
                 >
                   Controller Override
@@ -340,12 +331,12 @@ const ConflictRow = memo(function ConflictRow({
                     placeholder="State reason for manual override…"
                     value={overrideReason}
                     onChange={e => setOverrideReason(e.target.value)}
-                    style={{ fontSize: '0.72rem' }}
+                    style={{ fontSize: 13 }}
                   />
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button
                       className="btn btn-override"
-                      style={{ flex: 1, fontSize: '0.65rem' }}
+                      style={{ flex: 1, fontSize: 12 }}
                       onClick={() => {
                         if (!overrideReason.trim()) return
                         if (rec) onOverride?.(rec.id, overrideReason)
@@ -356,7 +347,7 @@ const ConflictRow = memo(function ConflictRow({
                     </button>
                     <button
                       className="btn btn-ghost"
-                      style={{ fontSize: '0.65rem', padding: '3px 12px' }}
+                      style={{ fontSize: 12, padding: '3px 12px' }}
                       onClick={() => { setShowOverride(false); setOverrideReason('') }}
                     >
                       Cancel

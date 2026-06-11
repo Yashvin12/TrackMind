@@ -3,7 +3,8 @@
  * =================================================
  * Pipe-separated KPI values displayed inside the header bar.
  * Monospaced numbers, color-coded by threshold.
- * No cards, no titles, just the numbers a controller needs at a glance.
+ * No cards, no titles — just the numbers a controller needs at a glance.
+ * Minimum font sizes: labels 11px, values 13px (SKILL.md compliant).
  */
 
 import { KPIMetrics } from '../types/api'
@@ -25,8 +26,8 @@ interface Metric {
 function Pip() {
   return (
     <span style={{
-      color: 'rgba(255,255,255,0.2)',
-      fontSize: '0.7rem',
+      color: 'rgba(255,255,255,0.18)',
+      fontSize: 13,
       margin: '0 8px',
       userSelect: 'none',
     }}>│</span>
@@ -38,8 +39,8 @@ function KPIItem({ label, value, color, blink }: Metric) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
       <span style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: '0.58rem',
-        color: 'rgba(255,255,255,0.38)',
+        fontSize: 11,
+        color: 'rgba(255,255,255,0.42)',
         textTransform: 'uppercase',
         letterSpacing: '0.06em',
       }}>
@@ -47,7 +48,7 @@ function KPIItem({ label, value, color, blink }: Metric) {
       </span>
       <span style={{
         fontFamily: 'var(--font-mono)',
-        fontSize: '0.82rem',
+        fontSize: 13,
         fontWeight: 700,
         color,
         letterSpacing: '0.02em',
@@ -69,7 +70,7 @@ export function KPIDashboard({ metrics, trains }: Props) {
     {
       label: 'Trains',
       value: String(d.active_trains ?? totalTrains),
-      color: 'rgba(255,255,255,0.85)',
+      color: 'rgba(255,255,255,0.88)',
     },
     {
       label: 'Conflicts',
@@ -78,19 +79,24 @@ export function KPIDashboard({ metrics, trains }: Props) {
       blink: d.active_conflicts > 0,
     },
     {
-      label: 'Delay',
+      label: 'Avg Delay',
       value: `${d.avg_delay_min.toFixed(1)}m`,
       color: d.avg_delay_min > 15 ? '#FCA5A5' : d.avg_delay_min > 5 ? '#FBBF24' : '#4ADE80',
     },
     {
       label: 'Throughput',
       value: `${d.throughput_pct.toFixed(0)}%`,
-      color: d.throughput_pct >= 90 ? '#4ADE80' : '#FBBF24',
+      color: d.throughput_pct >= 90 ? '#4ADE80' : d.throughput_pct >= 75 ? '#FBBF24' : '#FCA5A5',
     },
     {
-      label: 'Saved',
+      label: 'Delay Saved',
       value: `${d.delay_reduction_pct.toFixed(0)}%`,
       color: 'rgba(255,255,255,0.7)',
+    },
+    {
+      label: 'AI Rec',
+      value: String((d.recommendations_accepted ?? 0) + (d.recommendations_overridden ?? 0)),
+      color: 'rgba(255,255,255,0.65)',
     },
   ]
 
