@@ -11,8 +11,6 @@
 
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useQuery } from '@tanstack/react-query'
-import { kpiAPI } from '../services/api'
 import { Train, TRAIN_TYPE_COLORS } from '../types/train'
 import { PredictionEntry } from '../store/index'
 import { useStore } from '../store/index'
@@ -240,13 +238,6 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
 
   // Prefer prop predictions, fall back to store
   const predictions = propPredictions.length > 0 ? propPredictions : storePredictions
-
-  // Live data fetch
-  useQuery({
-    queryKey: ['predictions-live'],
-    queryFn: () => kpiAPI.predictions().then((r) => r.data),
-    refetchInterval: 3_000,
-  })
 
   const sortedPreds = useMemo(
     () => [...predictions].sort((a, b) => b.conflict_probability - a.conflict_probability),

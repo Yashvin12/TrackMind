@@ -1,29 +1,33 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { TrackMindWebSocket, WSMessage, WSMessageType } from '../services/websocket'
+import { TrackMindWebSocket, WSMessage, WSMessageType, WSStatus } from '../services/websocket'
 
 export function useWebSocket(path = '/ws/live') {
   const wsRef = useRef<TrackMindWebSocket | null>(null)
   const [connected, setConnected] = useState(false)
+  const [status, setStatus] = useState<WSStatus>('disconnected')
   const [lastMessage, setLastMessage] = useState<WSMessage | null>(null)
 
   useEffect(() => {
     const ws = new TrackMindWebSocket(path)
     wsRef.current = ws
 
-    const off = ws.on('*', (msg) => {
+    // React to every incoming message
+    const offMsg = ws.on('*', (msg) => {
       setLastMessage(msg)
       setConnected(ws.connected)
     })
 
+    // React to status changes (connected / reconnecting / disconnected)
+    const offStatus = ws.onStatus((newStatus) => {
+      setStatus(newStatus)
+      setConnected(newStatus === 'connected')
+    })
+
     ws.connect()
 
-    const pollConnected = setInterval(() => {
-      setConnected(ws.connected)
-    }, 1000)
-
     return () => {
-      off()
-      clearInterval(pollConnected)
+      offMsg()
+      offStatus()
       ws.disconnect()
     }
   }, [path])
@@ -39,5 +43,5 @@ export function useWebSocket(path = '/ws/live') {
     wsRef.current?.send(msg)
   }, [])
 
-  return { connected, lastMessage, subscribe, send }
+  return { connected, status, lastMessage, subscribe, send }
 }

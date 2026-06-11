@@ -113,6 +113,7 @@ interface TrainGroup {
   lane: TrainType
   x: number
   trains: Train[]
+  groupKey: string  // Stable key for React reconciliation (enables CSS transitions)
 }
 
 function groupTrains(trainList: Train[], spacing: number): TrainGroup[] {
@@ -133,7 +134,9 @@ function groupTrains(trainList: Train[], spacing: number): TrainGroup[] {
 
     const flush = () => {
       if (cluster.length > 0) {
-        groups.push({ lane: lane as TrainType, x: clusterX / cluster.length, trains: [...cluster] })
+        // Stable key: sorted train IDs joined — survives position changes
+        const stableKey = cluster.map((t) => t.id).sort().join('+')
+        groups.push({ lane: lane as TrainType, x: clusterX / cluster.length, trains: [...cluster], groupKey: stableKey })
         cluster = []
         clusterX = 0
       }
@@ -238,6 +241,9 @@ function TrainDetailCard({
 }
 
 // ── Single group marker ───────────────────────────────────────────────────────
+// All children render at LOCAL origin (0, 0).
+// The outer <g> uses `transform: translate(x, y)` with a CSS transition
+// so the browser compositor smoothly interpolates between 1Hz WS updates.
 function TrainGroupMarker({
   group,
   isConflict,
@@ -260,12 +266,18 @@ function TrainGroupMarker({
   const fadeOpacity = focusMode && !isFocused ? 0.1 : 1
 
   return (
-    <g style={{ opacity: fadeOpacity, transition: 'opacity 0.25s ease' }}>
-      {/* Conflict pulse ring */}
+    <g
+      style={{
+        opacity: fadeOpacity,
+        transform: `translate(${group.x}px, ${y}px)`,
+        transition: 'transform 0.9s linear, opacity 0.25s ease',
+      }}
+    >
+      {/* Conflict pulse ring — centered at local origin */}
       {isConflict && (
         <circle
-          cx={group.x}
-          cy={y}
+          cx={0}
+          cy={0}
           r={18}
           fill="none"
           stroke="#FF5757"
@@ -284,8 +296,8 @@ function TrainGroupMarker({
           // Grouped badge
           <>
             <rect
-              x={group.x - 22}
-              y={y - 10}
+              x={-22}
+              y={-10}
               width={44}
               height={20}
               rx={5}
@@ -295,8 +307,8 @@ function TrainGroupMarker({
               strokeWidth={1}
             />
             <text
-              x={group.x}
-              y={y + 4}
+              x={0}
+              y={4}
               textAnchor="middle"
               fontSize={9}
               fill={color}
@@ -310,8 +322,8 @@ function TrainGroupMarker({
           // Single train marker
           <>
             <rect
-              x={group.x - 10}
-              y={y - 6}
+              x={-10}
+              y={-6}
               width={20}
               height={12}
               rx={3}
@@ -321,13 +333,13 @@ function TrainGroupMarker({
             {/* Direction arrow */}
             {(train0?.direction ?? 1) === 1 ? (
               <polygon
-                points={`${group.x + 10},${y} ${group.x + 15},${y - 4} ${group.x + 15},${y + 4}`}
+                points={`10,0 15,-4 15,4`}
                 fill={color}
                 opacity={0.7}
               />
             ) : (
               <polygon
-                points={`${group.x - 10},${y} ${group.x - 15},${y - 4} ${group.x - 15},${y + 4}`}
+                points={`-10,0 -15,-4 -15,4`}
                 fill={color}
                 opacity={0.7}
               />
@@ -338,8 +350,8 @@ function TrainGroupMarker({
         {/* Delay badge (below marker) - only for single, delayed trains */}
         {isSingle && delay0 > 2 && (
           <text
-            x={group.x}
-            y={y + 22}
+            x={0}
+            y={22}
             textAnchor="middle"
             fontSize={7}
             fill="#FFB547"
@@ -350,7 +362,7 @@ function TrainGroupMarker({
         )}
       </g>
 
-      {/* Expanded card */}
+      {/* Expanded card — uses absolute coords since foreignObject needs them */}
       <AnimatePresence>
         {open && (
           <TrainDetailCard
@@ -772,7 +784,7 @@ export function NetworkMap({
 
             return (
               <TrainGroupMarker
-                key={`${group.lane}-${group.x.toFixed(0)}`}
+                key={group.groupKey}
                 group={group}
                 isConflict={isConflict}
                 focusMode={focusModeActive}

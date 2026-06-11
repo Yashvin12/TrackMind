@@ -106,13 +106,13 @@ export default function App() {
   const {
     trains, conflicts, liveConflicts, conflictHistory, stationState, blockOccupancy, signalStates,
     simulationRunning, sessionId, simElapsedSec,
-    kpis, activeView, wsConnected, auditLogs, predictions, whatIfResult, activeRecommendation,
+    kpis, activeView, auditLogs, predictions, whatIfResult, activeRecommendation,
     setActiveView, setWsConnected, setKpis, applyWSUpdate, addAuditLog,
     setPredictions, setActiveRecommendation, exitFocusMode, tickConflictLifecycles,
   } = useStore()
 
   const queryClient = useQueryClient()
-  const { connected, subscribe } = useWebSocket('/ws/live')
+  const { connected, status: wsStatus, subscribe } = useWebSocket('/ws/live')
 
   // ── Sync WS connection status ──────────────────────────────────────────────
   useEffect(() => {
@@ -304,14 +304,25 @@ export default function App() {
           {/* Live indicator */}
           <div className="flex items-center gap-1.5 ml-2">
             <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${wsConnected ? 'animate-pulse' : ''}`}
-              style={{ background: wsConnected ? 'var(--success)' : 'var(--danger)' }}
+              className={`inline-block w-1.5 h-1.5 rounded-full ${wsStatus === 'connected' ? 'animate-pulse' : ''}`}
+              style={{
+                background:
+                  wsStatus === 'connected' ? 'var(--success)'
+                  : wsStatus === 'reconnecting' ? 'var(--warning)'
+                  : 'var(--danger)',
+              }}
             />
             <span
               className="text-xs"
-              style={{ color: wsConnected ? 'var(--success)' : 'var(--danger)', fontFamily: 'var(--font-mono)' }}
+              style={{
+                color:
+                  wsStatus === 'connected' ? 'var(--success)'
+                  : wsStatus === 'reconnecting' ? 'var(--warning)'
+                  : 'var(--danger)',
+                fontFamily: 'var(--font-mono)',
+              }}
             >
-              {wsConnected ? 'LIVE' : 'OFFLINE'}
+              {wsStatus === 'connected' ? 'LIVE' : wsStatus === 'reconnecting' ? 'RECONNECTING' : 'OFFLINE'}
             </span>
           </div>
 
