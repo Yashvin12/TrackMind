@@ -32,15 +32,17 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict) -> None:
         """Send message to all connected clients."""
-        dead: list = []
-        data = json.dumps(message, default=str)
-        for cid, ws in list(self._active.items()):
+        data = await asyncio.to_thread(json.dumps, message, default=str)
+
+        async def _send(cid: str, ws: WebSocket):
             try:
-                await ws.send_text(data)
+                await asyncio.wait_for(ws.send_text(data), timeout=2.0)
             except Exception:
-                dead.append(cid)
-        for cid in dead:
-            self.disconnect(cid)
+                self.disconnect(cid)
+
+        tasks = [_send(cid, ws) for cid, ws in list(self._active.items())]
+        if tasks:
+            await asyncio.gather(*tasks)
 
     async def send_to(self, client_id: str, message: dict) -> None:
         ws = self._active.get(client_id)
@@ -74,11 +76,11 @@ async def live_broadcast_loop(interval_sec: float = 1.0) -> None:
         try:
             engine = get_engine()
             if engine.running and manager.client_count > 0:
-                snapshot = engine.tick()
+                snapshot = await asyncio.to_thread(engine.tick)
 
                 # Run conflict detection on every tick
                 try:
-                    conflicts = detector.detect(snapshot, network=engine.network)
+                    conflicts = await asyncio.to_thread(detector.detect, snapshot, network=engine.network)
                     conflict_dicts = [c.to_dict() for c in conflicts]
                     engine.set_active_conflicts(conflict_dicts)
                     snapshot = engine.get_state()  # refresh with updated conflicts

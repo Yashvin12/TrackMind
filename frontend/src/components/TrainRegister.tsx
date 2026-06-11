@@ -88,9 +88,9 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
   }
 
   function delayStr(min: number) {
-    if (min <= 0) return <span style={{ color: 'var(--safety-green)', fontFamily: 'var(--font-mono)' }}>On time</span>
+    if (min <= 0) return <span style={{ color: 'var(--safety-green)', fontFamily: 'var(--font-mono)', fontSize: 13 }}>On time</span>
     const color = min > 15 ? 'var(--safety-red)' : 'var(--safety-amber)'
-    return <span style={{ color, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>+{min.toFixed(0)}m</span>
+    return <span style={{ color, fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13 }}>+{min.toFixed(0)}m</span>
   }
 
   const total    = trainList.length
@@ -110,7 +110,7 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
             <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
           </svg>
           TRAIN REGISTER — SECTION CONTROL CHART
-          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 400, opacity: 0.7, fontSize: '0.6rem' }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 400, opacity: 0.7, fontSize: 11 }}>
             {total} active · {delayed} delayed · {critical > 0 ? <span style={{ color: '#FCA5A5' }}>{critical} critical</span> : '0 critical'}
           </span>
         </div>
@@ -126,7 +126,7 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
                   background: 'rgba(255,255,255,0.1)',
                   border: '1px solid rgba(255,255,255,0.2)',
                   color: 'var(--text-on-blue-dim)',
-                  fontSize: '0.65rem',
+                  fontSize: 11,
                   padding: '1px 20px 1px 6px',
                   borderRadius: 2,
                   fontFamily: 'var(--font-mono)',
@@ -152,11 +152,11 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
                   background: 'rgba(255,255,255,0.1)',
                   border: '1px solid rgba(255,255,255,0.2)',
                   color: 'white',
-                  fontSize: '0.65rem',
+                  fontSize: 12,
                   padding: '2px 8px',
                   borderRadius: 2,
                   fontFamily: 'var(--font-mono)',
-                  width: 160,
+                  width: 180,
                   outline: 'none',
                 }}
               />
@@ -217,16 +217,16 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
                           fontFamily: 'var(--font-mono)',
                           fontWeight: 700,
                           color: typeColor,
-                          fontSize: '0.8rem',
+                          fontSize: 14,
                         }}>
                           {t.id}
                         </span>
                       </td>
                       <td>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {t.name ?? t.type ?? '—'}
                         </div>
-                        <div style={{ fontSize: '0.6rem', color: typeColor, fontWeight: 700, textTransform: 'uppercase' }}>
+                        <div style={{ fontSize: 11, color: typeColor, fontWeight: 700, textTransform: 'uppercase', lineHeight: 1.2 }}>
                           {t.type}
                         </div>
                       </td>
@@ -234,30 +234,30 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
                         <span className={`badge ${pri?.badge ?? 'badge-neutral'}`}>{pri?.label ?? `P${t.priority_class}`}</span>
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)' }}>
                           {t.current_block ?? t.current_location ?? '—'}
                         </span>
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}>
-                          {(t.speed_kmh ?? 0).toFixed(0)}<span style={{ fontSize: '0.6rem', color: 'var(--text-faint)' }}> km/h</span>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>
+                          {(t.speed_kmh ?? 0).toFixed(0)}<span style={{ fontSize: 11, color: 'var(--text-faint)' }}> km/h</span>
                         </span>
                       </td>
                       <td>{delayStr(t.current_delay_min ?? 0)}</td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-muted)' }}>
                           {t.platform ? `P${t.platform}` : '—'}
                         </span>
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-secondary)' }}>
                           {t.eta_next_station ?? '—'}
                         </span>
                       </td>
                       <td>
                         <span style={{
                           fontFamily: 'var(--font-mono)',
-                          fontSize: '0.72rem',
+                          fontSize: 13,
                           color: (t.direction ?? 1) === 1 ? 'var(--safety-blue)' : 'var(--safety-amber)',
                           fontWeight: 700,
                         }}>

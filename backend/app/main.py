@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
     # Warm up ML predictor
     try:
         from app.services.predictor import Predictor
-        p = Predictor()
+        await asyncio.to_thread(Predictor)
         logger.info("ML predictor warmed up")
     except Exception as e:
         logger.warning(f"Predictor warm-up failed: {e}")
@@ -109,7 +109,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # tighten in production
+    allow_origins=settings.CORS_ORIGINS,      # tighten in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
