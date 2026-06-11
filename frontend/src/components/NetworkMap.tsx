@@ -1,18 +1,14 @@
 /**
- * NetworkMap — Operator-Grade Network Visualization
- * ===================================================
- * Visual lanes (Express / Passenger / Freight / Departmental) rendered as
- * horizontal parallel rails between station pillars. Supports:
- *  - Mouse-wheel zoom (horizontal spacing 120–500px)
- *  - Train stacking/grouping when visual distance < 48px
- *  - Smart labels: icon only → tooltip on hover → card on click
- *  - Block occupancy color-coding: green/yellow/red with flow animation
- *  - Focus Mode: fades unrelated elements when a conflict is selected
+ * NetworkMap — Light-Mode Railway Operations Map
+ * ===============================================
+ * Inspired by real COA (Control Office Application) and railway schematic displays.
+ * White canvas, IR-blue track lines, block occupancy color bands,
+ * station plates, platform squares, three-light signals, conflict hatching,
+ * route lock overlays, and a future-time timeline scrubber.
  */
 
 import { useMemo, useRef, useState, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { Train, TRAIN_TYPE_COLORS, TrainType } from '../types/train'
+import { Train, TrainType } from '../types/train'
 import { Conflict } from '../types/conflict'
 import { StationState } from '../store/index'
 import { useStore } from '../store/index'
@@ -25,32 +21,17 @@ interface Props {
   conflicts: Conflict[]
 }
 
-// ── Lane config ───────────────────────────────────────────────────────────────
-const LANES: { type: TrainType; label: string; yOffset: number }[] = [
-  { type: 'rajdhani',     label: 'Rajdhani',     yOffset: -72 },
-  { type: 'express',      label: 'Express',       yOffset: -24 },
-  { type: 'passenger',    label: 'Passenger',     yOffset: 24  },
-  { type: 'freight',      label: 'Freight',       yOffset: 72  },
-]
-const DEPARTMENTAL_OFFSET = 120
-
-// ── Station data ──────────────────────────────────────────────────────────────
-const STATION_KM: Record<string, number> = {
-  MUM: 0,
-  KLD: 60,
-  LNL: 96,
-  PNE: 192,
-  SRT: 450,
-}
+// ── Station config ────────────────────────────────────────────────────────────
+const STATION_KM: Record<string, number> = { MUM: 0, KLD: 60, LNL: 96, PNE: 192, SRT: 450 }
 const STATION_NAMES: Record<string, string> = {
   MUM: 'Mumbai CST',
-  KLD: 'Karjat',
+  KLD: 'Karjat Jn',
   LNL: 'Lonavala',
   PNE: 'Pune Jn',
   SRT: 'Solapur Rd',
 }
 const STATIONS = Object.keys(STATION_KM)
-const MAX_KM = STATION_KM['SRT']
+const MAX_KM   = STATION_KM['SRT']
 
 const BLOCKS: Array<{ id: string; from: string; to: string; type: 'single' | 'double' }> = [
   { id: 'BLK_MUM_KLD', from: 'MUM', to: 'KLD', type: 'double' },
@@ -59,351 +40,172 @@ const BLOCKS: Array<{ id: string; from: string; to: string; type: 'single' | 'do
   { id: 'BLK_PNE_SRT', from: 'PNE', to: 'SRT', type: 'single' },
 ]
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-const SVG_H = 480
-const PAD_L = 72
-const PAD_R = 72
-const PAD_T = 40
-const CENTER_Y = SVG_H / 2
+// Lane config for parallel tracks
+const LANES: { type: TrainType; yOffset: number }[] = [
+  { type: 'rajdhani',  yOffset: -64 },
+  { type: 'express',   yOffset: -22 },
+  { type: 'passenger', yOffset:  22 },
+  { type: 'freight',   yOffset:  64 },
+]
+const DEPT_OFFSET = 108
 
-const DEFAULT_SPACING = 180  // px between stations
-const MIN_SPACING = 120
-const MAX_SPACING = 420
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function stationX(code: string, spacing: number): number {
-  const km = STATION_KM[code] ?? 0
-  return PAD_L + (km / MAX_KM) * (spacing * (STATIONS.length - 1))
+const TRAIN_LIGHT_COLORS: Record<string, string> = {
+  rajdhani:     '#6D28D9',
+  express:      '#1565C0',
+  passenger:    '#0E7490',
+  freight:      '#92400E',
+  departmental: '#374151',
 }
 
-function svgWidth(spacing: number): number {
-  return stationX('SRT', spacing) + PAD_R
-}
+// ── SVG dimensions ────────────────────────────────────────────────────────────
+const SVG_H    = 440
+const PAD_L    = 80
+const PAD_R    = 60
+const PAD_T    = 52
+const CENTER_Y = SVG_H / 2 - 10
 
-function trainX(train: Train, spacing: number): number {
-  if (train.km_position !== undefined) {
-    return PAD_L + (train.km_position / MAX_KM) * (spacing * (STATIONS.length - 1))
-  }
-  const loc = train.current_location
+const DEFAULT_SPACING = 190
+const MIN_SPACING     = 130
+const MAX_SPACING     = 440
+
+function stationX(code: string, spacing: number) {
+  return PAD_L + (STATION_KM[code] / MAX_KM) * (spacing * (STATIONS.length - 1))
+}
+function svgWidth(spacing: number) { return stationX('SRT', spacing) + PAD_R }
+
+function trainX(t: Train, spacing: number): number {
+  if (t.km_position !== undefined) return PAD_L + (t.km_position / MAX_KM) * (spacing * (STATIONS.length - 1))
+  const loc   = t.current_location
   if (STATION_KM[loc] !== undefined) return stationX(loc, spacing)
-  const block = BLOCKS.find((b) => b.id === loc || b.id === train.current_block)
+  const block = BLOCKS.find(b => b.id === loc || b.id === t.current_block)
   if (block) {
-    const fx = stationX(block.from, spacing)
-    const tx = stationX(block.to, spacing)
-    return fx + (tx - fx) * (train.progress_pct ?? 0.5)
+    return stationX(block.from, spacing) + (stationX(block.to, spacing) - stationX(block.from, spacing)) * (t.progress_pct ?? 0.5)
   }
   return stationX('MUM', spacing)
 }
-
 function laneY(type: TrainType): number {
-  if (type === 'departmental') return CENTER_Y + DEPARTMENTAL_OFFSET
-  const lane = LANES.find((l) => l.type === type)
-  return CENTER_Y + (lane?.yOffset ?? 0)
+  if (type === 'departmental') return CENTER_Y + DEPT_OFFSET
+  return CENTER_Y + (LANES.find(l => l.type === type)?.yOffset ?? 0)
 }
 
-function getSignalColor(state: string): string {
-  if (state === 'green')  return '#10b981'
-  if (state === 'yellow') return '#f59e0b'
-  if (state === 'red')    return '#ef4444'
-  return '#6b7280'
-}
-
-// ── Train Group ───────────────────────────────────────────────────────────────
-interface TrainGroup {
-  lane: TrainType
-  x: number
-  trains: Train[]
-  groupKey: string  // Stable key for React reconciliation (enables CSS transitions)
-}
-
-function groupTrains(trainList: Train[], spacing: number): TrainGroup[] {
-  // Bucket by lane type
-  const byLane: Record<string, Train[]> = {}
-  for (const t of trainList) {
-    const type = t.type ?? 'passenger'
-    if (!byLane[type]) byLane[type] = []
-    byLane[type].push(t)
-  }
-
-  const groups: TrainGroup[] = []
-  for (const [lane, trains] of Object.entries(byLane)) {
-    // Sort by x position
-    const sorted = [...trains].sort((a, b) => trainX(a, spacing) - trainX(b, spacing))
-    let cluster: Train[] = []
-    let clusterX = 0
-
-    const flush = () => {
-      if (cluster.length > 0) {
-        // Stable key: sorted train IDs joined — survives position changes
-        const stableKey = cluster.map((t) => t.id).sort().join('+')
-        groups.push({ lane: lane as TrainType, x: clusterX / cluster.length, trains: [...cluster], groupKey: stableKey })
-        cluster = []
-        clusterX = 0
-      }
-    }
-
-    for (const train of sorted) {
-      const tx = trainX(train, spacing)
-      if (cluster.length === 0) {
-        cluster.push(train)
-        clusterX = tx
-      } else {
-        const avgX = clusterX / cluster.length
-        if (Math.abs(tx - avgX) < 48) {
-          cluster.push(train)
-          clusterX += tx
-        } else {
-          flush()
-          cluster.push(train)
-          clusterX = tx
-        }
-      }
-    }
-    flush()
-  }
-  return groups
-}
-
-// ── Train Card (tooltip / expanded) ──────────────────────────────────────────
-function TrainDetailCard({
-  trains,
-  x, y,
-  onClose,
-}: {
-  trains: Train[]
-  x: number
-  y: number
-  onClose: () => void
+// ── TrainMarker ───────────────────────────────────────────────────────────────
+function TrainMarker({ train, x, isConflict, isFocused, focusMode, onSelect }: {
+  train: Train; x: number; isConflict: boolean; isFocused: boolean; focusMode: boolean; onSelect: () => void
 }) {
-  const cardW = 200
-  const cardH = trains.length * 72 + 32
-  const clampedX = Math.max(8, Math.min(x - cardW / 2, 9999))
-  const clampedY = y - cardH - 16
-
-  return (
-    <foreignObject x={clampedX} y={clampedY} width={cardW} height={cardH + 8} style={{ overflow: 'visible' }}>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        transition={{ duration: 0.15 }}
-        style={{
-          background: '#0B1328',
-          border: '1px solid #243154',
-          borderRadius: 10,
-          padding: '8px 10px',
-          fontSize: 10,
-          color: '#E8EBF5',
-          fontFamily: 'IBM Plex Mono, monospace',
-          pointerEvents: 'auto',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-          userSelect: 'none',
-        }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ color: '#8FA7D9', fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            {trains.length} trains
-          </span>
-          <button
-            onClick={onClose}
-            style={{ color: '#6B7A9E', background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, padding: 0 }}
-          >
-            ✕
-          </button>
-        </div>
-        {trains.map((train) => {
-          const color = TRAIN_TYPE_COLORS[train.type] ?? '#94a3b8'
-          const delay = train.current_delay_min
-          return (
-            <div
-              key={train.id}
-              style={{
-                borderTop: '1px solid #1A2540',
-                paddingTop: 6,
-                marginTop: 4,
-              }}
-            >
-              <div style={{ fontWeight: 700, color, marginBottom: 2 }}>{train.id}</div>
-              <div style={{ color: '#9AA7C9', fontSize: 9 }}>{train.name ?? train.type}</div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 9 }}>
-                <span style={{ color: delay > 5 ? '#FF5757' : '#20D97C' }}>
-                  {delay > 0 ? `+${delay.toFixed(0)}m` : 'On time'}
-                </span>
-                <span style={{ color: '#6B7A9E' }}>{train.speed_kmh.toFixed(0)} km/h</span>
-                <span style={{ color: '#6B7A9E' }}>P{train.priority_class}</span>
-              </div>
-            </div>
-          )
-        })}
-      </motion.div>
-    </foreignObject>
-  )
-}
-
-// ── Single group marker ───────────────────────────────────────────────────────
-// All children render at LOCAL origin (0, 0).
-// The outer <g> uses `transform: translate(x, y)` with a CSS transition
-// so the browser compositor smoothly interpolates between 1Hz WS updates.
-function TrainGroupMarker({
-  group,
-  isConflict,
-  focusMode,
-  isFocused,
-}: {
-  group: TrainGroup
-  isConflict: boolean
-  focusMode: boolean
-  isFocused: boolean
-}) {
-  const [open, setOpen] = useState(false)
-  const y = laneY(group.lane)
-  const color = TRAIN_TYPE_COLORS[group.lane] ?? '#94a3b8'
-  const isMulti = group.trains.length > 1
-  const isSingle = group.trains.length === 1
-  const train0 = group.trains[0]
-  const delay0 = train0?.current_delay_min ?? 0
-
-  const fadeOpacity = focusMode && !isFocused ? 0.1 : 1
+  const [hover, setHover] = useState(false)
+  const y      = laneY(train.type as TrainType)
+  const color  = TRAIN_LIGHT_COLORS[train.type ?? 'passenger']
+  const delay  = train.current_delay_min ?? 0
+  const isUp   = (train.direction ?? 1) === 1
+  const fadeOp = focusMode && !isFocused ? 0.1 : 1
 
   return (
     <g
-      style={{
-        opacity: fadeOpacity,
-        transform: `translate(${group.x}px, ${y}px)`,
-        transition: 'transform 0.9s linear, opacity 0.25s ease',
-      }}
+      opacity={fadeOp}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onSelect}
+      style={{ cursor: 'pointer', transition: `opacity 0.25s ease`, transform: `translate(${x}px, ${y}px)` }}
     >
-      {/* Conflict pulse ring — centered at local origin */}
+      {/* Conflict pulse ring */}
       {isConflict && (
-        <circle
-          cx={0}
-          cy={0}
-          r={18}
-          fill="none"
-          stroke="#FF5757"
-          strokeWidth={1.5}
-          opacity={0.5}
-          style={{ animation: 'pulse-ring 1.4s ease-in-out infinite' }}
-        />
+        <circle r={16} fill="none" stroke="var(--safety-red)" strokeWidth={1.5}
+          opacity={0.7} style={{ animation: 'pulse-conflict 1.2s ease-in-out infinite' }} />
       )}
 
-      {/* Clickable body */}
-      <g
-        onClick={() => setOpen((o) => !o)}
-        style={{ cursor: 'pointer' }}
-      >
-        {isMulti ? (
-          // Grouped badge
-          <>
-            <rect
-              x={-22}
-              y={-10}
-              width={44}
-              height={20}
-              rx={5}
-              fill={color}
-              opacity={0.18}
-              stroke={color}
-              strokeWidth={1}
-            />
-            <text
-              x={0}
-              y={4}
-              textAnchor="middle"
-              fontSize={9}
-              fill={color}
-              fontFamily="IBM Plex Mono, monospace"
-              fontWeight="700"
-            >
-              ({group.trains.length})
-            </text>
-          </>
-        ) : (
-          // Single train marker
-          <>
-            <rect
-              x={-10}
-              y={-6}
-              width={20}
-              height={12}
-              rx={3}
-              fill={color}
-              opacity={0.9}
-            />
-            {/* Direction arrow */}
-            {(train0?.direction ?? 1) === 1 ? (
-              <polygon
-                points={`10,0 15,-4 15,4`}
-                fill={color}
-                opacity={0.7}
-              />
-            ) : (
-              <polygon
-                points={`-10,0 -15,-4 -15,4`}
-                fill={color}
-                opacity={0.7}
-              />
-            )}
-          </>
-        )}
+      {/* Train body */}
+      <rect x={-18} y={-7} width={36} height={14} rx={2}
+        fill={color} stroke={isConflict ? 'var(--safety-red)' : 'transparent'} strokeWidth={1.5}
+        opacity={hover ? 1 : 0.9}
+      />
 
-        {/* Delay badge (below marker) - only for single, delayed trains */}
-        {isSingle && delay0 > 2 && (
-          <text
-            x={0}
-            y={22}
-            textAnchor="middle"
-            fontSize={7}
-            fill="#FFB547"
-            fontFamily="IBM Plex Mono, monospace"
-          >
-            +{delay0.toFixed(0)}m
+      {/* Direction arrow */}
+      {isUp
+        ? <polygon points="18,-4 24,0 18,4" fill={color} opacity={0.8} />
+        : <polygon points="-18,-4 -24,0 -18,4" fill={color} opacity={0.8} />
+      }
+
+      {/* Train ID */}
+      <text x={0} y={4} textAnchor="middle" fontSize={7.5} fill="white"
+        fontFamily="var(--font-mono)" fontWeight="700" style={{ pointerEvents: 'none' }}>
+        {train.id}
+      </text>
+
+      {/* Delay badge */}
+      {delay > 2 && (
+        <g>
+          <rect x={-12} y={10} width={24} height={10} rx={2}
+            fill={delay > 15 ? 'var(--safety-red)' : 'var(--safety-amber)'} opacity={0.9} />
+          <text x={0} y={18} textAnchor="middle" fontSize={6.5}
+            fill="white" fontFamily="var(--font-mono)" fontWeight="700">
+            +{delay.toFixed(0)}m
           </text>
-        )}
-      </g>
+        </g>
+      )}
 
-      {/* Expanded card — uses absolute coords since foreignObject needs them */}
-      <AnimatePresence>
-        {open && (
-          <TrainDetailCard
-            trains={group.trains}
-            x={group.x}
-            y={y}
-            onClose={() => setOpen(false)}
-          />
-        )}
-      </AnimatePresence>
+      {/* Hover tooltip */}
+      {hover && (
+        <foreignObject x={20} y={-40} width={130} height={76} style={{ overflow: 'visible', pointerEvents: 'none' }}>
+          <div style={{
+            background: 'white', border: '1px solid var(--border-strong)',
+            borderRadius: 3, padding: '5px 8px', fontSize: 10,
+            fontFamily: 'var(--font-mono)', color: 'var(--text-primary)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+            whiteSpace: 'nowrap',
+          }}>
+            <div style={{ fontWeight: 700, color, marginBottom: 2 }}>{train.id} · {train.name ?? train.type}</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: 9 }}>{train.current_location}</div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 9 }}>
+              <span style={{ color: delay > 5 ? 'var(--safety-red)' : 'var(--safety-green)' }}>
+                {delay > 0 ? `+${delay.toFixed(0)}m` : 'On time'}
+              </span>
+              <span>{(train.speed_kmh ?? 0).toFixed(0)} km/h</span>
+            </div>
+          </div>
+        </foreignObject>
+      )}
     </g>
   )
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
-export function NetworkMap({
-  trains,
-  stationState,
-  blockOccupancy,
-  signalStates,
-  conflicts,
-}: Props) {
-  const [spacing, setSpacing] = useState(DEFAULT_SPACING)
+// ── Signal post ───────────────────────────────────────────────────────────────
+function SignalPost({ x, y, state }: { x: number; y: number; state: string }) {
+  const red    = state === 'red'
+  const yellow = state === 'yellow'
+  const green  = state === 'green' || (!red && !yellow)
+  return (
+    <g>
+      <line x1={x} y1={y} x2={x} y2={y + 18} stroke="#374151" strokeWidth={1.5} />
+      <rect x={x - 5} y={y - 14} width={10} height={20} rx={2} fill="#1F2937" stroke="#374151" strokeWidth={0.5} />
+      <circle cx={x} cy={y - 10} r={3} fill={red ? '#DC2626' : '#374151'} opacity={red ? 1 : 0.3} />
+      <circle cx={x} cy={y - 4}  r={3} fill={yellow ? '#D97706' : '#374151'} opacity={yellow ? 1 : 0.3} />
+      <circle cx={x} cy={y + 2}  r={3} fill={green ? '#16A34A' : '#374151'} opacity={green ? 1 : 0.3} />
+    </g>
+  )
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+export function NetworkMap({ trains, stationState, blockOccupancy, signalStates, conflicts }: Props) {
+  const [spacing, setSpacing]           = useState(DEFAULT_SPACING)
+  const [heatmap, setHeatmap]           = useState(false)
+  const [previewOffset, setPreviewOffset] = useState(0)  // minutes into future
   const svgRef = useRef<SVGSVGElement>(null)
   const { selectedConflictId, focusModeActive, liveConflicts } = useStore()
 
   const trainList = useMemo(() => Object.values(trains), [trains])
 
   const conflictBlocks = useMemo(
-    () => new Set(conflicts.filter((c) => !c.resolved).map((c) => c.block_section)),
+    () => new Set(conflicts.filter(c => !c.resolved).map(c => c.block_section)),
     [conflicts]
   )
   const conflictTrainIds = useMemo(
-    () => new Set(conflicts.flatMap((c) => [...(c.affected_trains ?? []), ...(c.trains_involved ?? [])])),
+    () => new Set(conflicts.flatMap(c => [...(c.affected_trains ?? []), ...(c.trains_involved ?? [])])),
     [conflicts]
   )
 
-  // Focus mode: find affected elements for the selected conflict
   const focusedConflict = useMemo(() => {
     if (!selectedConflictId) return null
-    return liveConflicts.find((lc) => lc.id === selectedConflictId) ?? null
+    return liveConflicts.find(lc => lc.id === selectedConflictId) ?? null
   }, [selectedConflictId, liveConflicts])
 
   const focusedTrainIds = useMemo(
@@ -412,433 +214,398 @@ export function NetworkMap({
   )
   const focusedBlock = focusedConflict?.block_section ?? null
 
-  // Train groups (stacked when <48px apart in same lane)
-  const trainGroups = useMemo(() => groupTrains(trainList, spacing), [trainList, spacing])
-
   const W = svgWidth(spacing)
 
-  // Mouse wheel zoom
-  const handleWheel = useCallback(
-    (e: React.WheelEvent<SVGSVGElement>) => {
-      e.preventDefault()
-      setSpacing((prev) => {
-        const delta = e.deltaY > 0 ? -16 : 16
-        return Math.max(MIN_SPACING, Math.min(MAX_SPACING, prev + delta))
-      })
-    },
-    []
-  )
+  const handleWheel = useCallback((e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault()
+    setSpacing(prev => Math.max(MIN_SPACING, Math.min(MAX_SPACING, prev + (e.deltaY > 0 ? -20 : 20))))
+  }, [])
 
-  const handleFitToSection = () => setSpacing(DEFAULT_SPACING)
+  // Block heatmap color (based on occupancy count)
+  function heatColor(blockId: string): string {
+    const count = (blockOccupancy[blockId] ?? []).length
+    if (count === 0) return 'rgba(22,163,74,0.06)'
+    if (count <= 2)  return 'rgba(217,119,6,0.10)'
+    return 'rgba(220,38,38,0.14)'
+  }
 
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{ background: 'var(--surface-1)', border: '1px solid var(--border)' }}
-    >
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-4 py-3 border-b"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        <div>
-          <h2 className="font-heading font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-            Network Map
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-            Mumbai–Pune Corridor &bull; {trainList.length} trains active
-            {focusModeActive && (
-              <span style={{ color: 'var(--warning)', marginLeft: 8 }}>● FOCUS MODE</span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {conflictBlocks.size > 0 && (
-            <span
-              className="flex items-center gap-1.5 text-xs px-2 py-1 rounded"
-              style={{
-                background: 'var(--danger)18',
-                border: '1px solid var(--danger)44',
-                color: 'var(--danger)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: 'var(--danger)' }} />
-              {conflictBlocks.size} block{conflictBlocks.size !== 1 ? 's' : ''} conflicted
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'white' }}>
+      {/* Map header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '6px 12px',
+        borderBottom: '1px solid var(--border)',
+        background: 'var(--bg-row-alt)',
+        flexShrink: 0,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '0.78rem', color: 'var(--ir-blue)', letterSpacing: '0.05em' }}>
+            NETWORK OCCUPANCY MAP
+          </span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--text-muted)' }}>
+            Mumbai–Solapur Corridor · {trainList.length} trains
+          </span>
+          {focusModeActive && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '0.6rem', fontWeight: 700,
+              color: 'var(--safety-amber)', background: 'var(--safety-amber-light)',
+              padding: '1px 7px', borderRadius: 2, border: '1px solid var(--safety-amber-border)',
+            }}>
+              ● FOCUS MODE · ESC to exit
             </span>
           )}
-          {/* Zoom controls */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setSpacing((s) => Math.max(MIN_SPACING, s - 24))}
-              className="px-2 py-1 rounded text-xs transition-all"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-              title="Zoom out"
-            >
-              −
-            </button>
-            <button
-              onClick={handleFitToSection}
-              className="px-2 py-1 rounded text-xs transition-all"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-              title="Fit to section"
-            >
-              ⊞
-            </button>
-            <button
-              onClick={() => setSpacing((s) => Math.min(MAX_SPACING, s + 24))}
-              className="px-2 py-1 rounded text-xs transition-all"
-              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-              title="Zoom in"
-            >
-              +
-            </button>
-          </div>
-          <span
-            className="text-xs px-2 py-1 rounded"
-            style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
+          {conflictBlocks.size > 0 && (
+            <span style={{
+              display: 'flex', alignItems: 'center', gap: 4,
+              fontFamily: 'var(--font-mono)', fontSize: '0.6rem', fontWeight: 700,
+              color: 'var(--safety-red)', background: 'var(--safety-red-light)',
+              padding: '1px 7px', borderRadius: 2, border: '1px solid var(--safety-red-border)',
+              animation: 'pulse-conflict 1.5s ease-in-out infinite',
+            }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--safety-red)', animation: 'blink-live 1s ease-in-out infinite', display: 'inline-block' }} />
+              {conflictBlocks.size} SECTION{conflictBlocks.size > 1 ? 'S' : ''} CONFLICTED
+            </span>
+          )}
+        </div>
+
+        {/* Controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => setHeatmap(v => !v)}
+            style={{
+              padding: '2px 8px', borderRadius: 2, fontSize: '0.62rem', fontWeight: 600,
+              fontFamily: 'var(--font-mono)', cursor: 'pointer',
+              background: heatmap ? 'var(--safety-amber-light)' : 'var(--bg-panel)',
+              color: heatmap ? 'var(--safety-amber)' : 'var(--text-muted)',
+              border: `1px solid ${heatmap ? 'var(--safety-amber-border)' : 'var(--border-strong)'}`,
+              transition: 'all 100ms',
+            }}
           >
-            LIVE
-          </span>
+            HEATMAP
+          </button>
+          <div style={{ display: 'flex', gap: 3 }}>
+            {[['−', -20], ['⊞', 0], ['+', 20]].map(([label, delta]) => (
+              <button
+                key={label}
+                onClick={() => delta === 0 ? setSpacing(DEFAULT_SPACING) : setSpacing(s => Math.max(MIN_SPACING, Math.min(MAX_SPACING, s + Number(delta))))}
+                style={{
+                  width: 22, height: 22, borderRadius: 2, fontSize: '0.75rem', fontWeight: 700,
+                  background: 'var(--bg-panel)', color: 'var(--text-muted)',
+                  border: '1px solid var(--border-strong)', cursor: 'pointer',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* SVG Map */}
-      <div className="overflow-x-auto" style={{ overscrollBehaviorX: 'contain' }}>
+      {/* SVG Map canvas */}
+      <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${SVG_H}`}
           width={W}
           height={SVG_H}
-          style={{ minWidth: 500, display: 'block' }}
-          role="img"
-          aria-label="Railway network map"
+          style={{ minWidth: 560, display: 'block', background: 'var(--bg-panel)' }}
           onWheel={handleWheel}
+          aria-label="Railway network occupancy map"
         >
           <defs>
-            {/* Glow filter */}
-            <filter id="nm-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            {/* Flow animation for occupied tracks */}
-            <linearGradient id="track-flow-occupied" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#4E7CFF" stopOpacity="0.3" />
-              <stop offset="50%" stopColor="#4E7CFF" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#4E7CFF" stopOpacity="0.3" />
-            </linearGradient>
-            <linearGradient id="track-flow-conflict" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#FF5757" stopOpacity="0.4" />
-              <stop offset="50%" stopColor="#FF5757" stopOpacity="1" />
-              <stop offset="100%" stopColor="#FF5757" stopOpacity="0.4" />
-            </linearGradient>
-            {/* Grid */}
-            <pattern id="nm-grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#1A2540" strokeWidth="0.4" />
+            {/* Conflict hatching pattern */}
+            <pattern id="conflict-hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(220,38,38,0.25)" strokeWidth="3" />
+            </pattern>
+            {/* Subtle grid */}
+            <pattern id="light-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#E5E7EB" strokeWidth="0.5" />
+            </pattern>
+            {/* Route lock dashes */}
+            <pattern id="route-lock" width="12" height="12" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="12" y2="12" stroke="rgba(21,101,192,0.3)" strokeWidth="1.5" />
             </pattern>
           </defs>
 
           {/* Background grid */}
-          <rect width={W} height={SVG_H} fill="url(#nm-grid)" opacity={0.5} />
+          <rect width={W} height={SVG_H} fill="url(#light-grid)" />
 
-          {/* ── Lane labels (left margin) ──────────────────────────────── */}
-          {LANES.map((lane) => (
-            <text
-              key={`lane-label-${lane.type}`}
-              x={PAD_L - 6}
-              y={CENTER_Y + lane.yOffset + 4}
-              textAnchor="end"
-              fontSize={7}
-              fill={TRAIN_TYPE_COLORS[lane.type]}
-              fontFamily="IBM Plex Mono, monospace"
-              opacity={0.7}
-            >
-              {lane.label.toUpperCase()}
-            </text>
-          ))}
-          <text
-            x={PAD_L - 6}
-            y={CENTER_Y + DEPARTMENTAL_OFFSET + 4}
-            textAnchor="end"
-            fontSize={7}
-            fill={TRAIN_TYPE_COLORS['departmental']}
-            fontFamily="IBM Plex Mono, monospace"
-            opacity={0.7}
-          >
-            DEPT
-          </text>
-
-          {/* ── Track rails for each lane ──────────────────────────────── */}
-          {BLOCKS.map((block) => {
-            const fromX = stationX(block.from, spacing)
-            const toX = stationX(block.to, spacing)
+          {/* ── Block sections ────────────────────────────────────────────── */}
+          {BLOCKS.map(block => {
+            const fromX    = stationX(block.from, spacing)
+            const toX      = stationX(block.to, spacing)
             const occupied = (blockOccupancy[block.id] ?? []).length > 0
-            const isConflict = conflictBlocks.has(block.id)
-            const isFocusedBlock = block.id === focusedBlock
-            const blockFocus = focusModeActive && !isFocusedBlock
+            const isConflict  = conflictBlocks.has(block.id)
+            const isFocusedBlk = block.id === focusedBlock
+            const blockFade = focusModeActive && !isFocusedBlk ? 0.15 : 1
+            const trackW   = block.type === 'double' ? 5 : 3.5
+            const midX     = (fromX + toX) / 2
 
-            const baseColor = isConflict ? '#FF5757' : occupied ? '#4E7CFF' : '#1A2540'
+            // Block fill color
+            const fillColor = isConflict ? 'rgba(220,38,38,0.08)'
+              : occupied ? 'rgba(217,119,6,0.07)'
+              : heatmap ? heatColor(block.id)
+              : 'transparent'
+
+            const signalKey   = Object.keys(signalStates).find(k => k.includes(block.from) || k.includes(block.id))
+            const signalState = signalKey ? signalStates[signalKey] : 'green'
 
             return (
-              <g key={block.id} style={{ opacity: blockFocus ? 0.12 : 1, transition: 'opacity 0.25s ease' }}>
-                {/* All lanes rendered as parallel rails */}
-                {[...LANES.map((l) => l.yOffset), DEPARTMENTAL_OFFSET].map((yOff) => (
+              <g key={block.id} style={{ opacity: blockFade, transition: 'opacity 0.25s ease' }}>
+                {/* Block background band */}
+                <rect
+                  x={fromX} y={CENTER_Y - DEPT_OFFSET - 20}
+                  width={toX - fromX} height={DEPT_OFFSET * 2 + 40}
+                  fill={fillColor}
+                />
+
+                {/* Conflict hatching */}
+                {isConflict && (
+                  <rect
+                    x={fromX} y={CENTER_Y - DEPT_OFFSET - 20}
+                    width={toX - fromX} height={DEPT_OFFSET * 2 + 40}
+                    fill="url(#conflict-hatch)"
+                  />
+                )}
+
+                {/* Focus ring */}
+                {isFocusedBlk && focusModeActive && (
+                  <rect
+                    x={fromX} y={CENTER_Y - DEPT_OFFSET - 24}
+                    width={toX - fromX} height={DEPT_OFFSET * 2 + 48}
+                    fill="none" stroke="var(--safety-red)" strokeWidth={2}
+                    strokeDasharray="6 4" rx={3}
+                    style={{ animation: 'pulse-conflict 1.5s ease-in-out infinite' }}
+                  />
+                )}
+
+                {/* Rails for each lane */}
+                {[...LANES.map(l => l.yOffset), DEPT_OFFSET].map(yOff => (
                   <g key={yOff}>
-                    {/* Rail base */}
+                    {/* Rail bed */}
                     <line
-                      x1={fromX}
-                      y1={CENTER_Y + yOff}
-                      x2={toX}
-                      y2={CENTER_Y + yOff}
-                      stroke={isConflict ? '#2A1520' : '#12213A'}
-                      strokeWidth={block.type === 'double' ? 6 : 4}
+                      x1={fromX} y1={CENTER_Y + yOff}
+                      x2={toX}   y2={CENTER_Y + yOff}
+                      stroke={isConflict ? '#FCA5A5' : occupied ? '#FCD34D' : '#E5E7EB'}
+                      strokeWidth={trackW + 3}
                     />
-                    {/* Main colored rail */}
+                    {/* Rail */}
                     <line
-                      x1={fromX}
-                      y1={CENTER_Y + yOff}
-                      x2={toX}
-                      y2={CENTER_Y + yOff}
-                      stroke={baseColor}
-                      strokeWidth={block.type === 'double' ? 3 : 2}
-                      opacity={isConflict ? 0.9 : occupied ? 0.6 : 0.4}
+                      x1={fromX} y1={CENTER_Y + yOff}
+                      x2={toX}   y2={CENTER_Y + yOff}
+                      stroke={isConflict ? 'var(--safety-red)' : occupied ? 'var(--safety-amber)' : 'var(--ir-blue)'}
+                      strokeWidth={trackW}
+                      opacity={isConflict ? 0.9 : occupied ? 0.7 : 0.5}
                     />
-                    {/* Animated flow overlay */}
+                    {/* Flow animation on occupied/conflict */}
                     {(occupied || isConflict) && (
                       <line
-                        x1={fromX}
-                        y1={CENTER_Y + yOff}
-                        x2={toX}
-                        y2={CENTER_Y + yOff}
-                        stroke={isConflict ? '#FF5757' : '#4E7CFF'}
+                        x1={fromX} y1={CENTER_Y + yOff}
+                        x2={toX}   y2={CENTER_Y + yOff}
+                        stroke={isConflict ? 'var(--safety-red)' : 'var(--safety-amber)'}
                         strokeWidth={2}
-                        strokeDasharray="12 16"
-                        opacity={0.5}
-                        style={{
-                          animation: `track-flow ${isConflict ? '0.7s' : '1.2s'} linear infinite`,
-                        }}
+                        strokeDasharray="10 14"
+                        opacity={0.55}
+                        style={{ animation: `track-flow ${isConflict ? '0.6s' : '1s'} linear infinite` }}
                       />
                     )}
                   </g>
                 ))}
 
-                {/* Conflict heat overlay on the band */}
+                {/* Conflict warning label */}
                 {isConflict && (
-                  <rect
-                    x={fromX}
-                    y={CENTER_Y - DEPARTMENTAL_OFFSET - 20}
-                    width={toX - fromX}
-                    height={DEPARTMENTAL_OFFSET * 2 + 40}
-                    fill="#FF5757"
-                    opacity={0.04}
-                    rx={4}
-                    filter={isFocusedBlock ? 'url(#nm-glow)' : undefined}
-                  />
+                  <g>
+                    <rect x={midX - 28} y={CENTER_Y - DEPT_OFFSET - 38} width={56} height={14} rx={2}
+                      fill="var(--safety-red)" opacity={0.9} />
+                    <text x={midX} y={CENTER_Y - DEPT_OFFSET - 28}
+                      textAnchor="middle" fontSize={7.5} fill="white"
+                      fontFamily="var(--font-heading)" fontWeight="700" letterSpacing="0.04em">
+                      ⚠ CONFLICT
+                    </text>
+                  </g>
                 )}
 
-                {/* Focus ring on the focused block */}
-                {isFocusedBlock && focusModeActive && (
-                  <rect
-                    x={fromX}
-                    y={CENTER_Y - DEPARTMENTAL_OFFSET - 24}
-                    width={toX - fromX}
-                    height={DEPARTMENTAL_OFFSET * 2 + 48}
-                    fill="none"
-                    stroke="#FF5757"
-                    strokeWidth={2}
-                    strokeDasharray="6 4"
-                    opacity={0.6}
-                    rx={6}
-                    style={{ animation: 'pulse-ring 1.5s ease-in-out infinite' }}
-                  />
-                )}
-
-                {/* Block occupancy label */}
-                {occupied && (
-                  <text
-                    x={(fromX + toX) / 2}
-                    y={CENTER_Y - DEPARTMENTAL_OFFSET - 30}
-                    textAnchor="middle"
-                    fontSize={7}
-                    fill={isConflict ? '#FF5757' : '#4E7CFF'}
-                    fontFamily="IBM Plex Mono, monospace"
-                  >
+                {/* Occupancy count */}
+                {occupied && !isConflict && (
+                  <text x={midX} y={CENTER_Y - DEPT_OFFSET - 26}
+                    textAnchor="middle" fontSize={7} fill="var(--safety-amber)"
+                    fontFamily="var(--font-mono)" fontWeight="700">
                     {(blockOccupancy[block.id] ?? []).length}T
                   </text>
                 )}
+
+                {/* Signal post */}
+                <SignalPost x={fromX + 24} y={CENTER_Y - 28} state={signalState} />
+
+                {/* Block type label */}
+                <text x={midX} y={SVG_H - 18}
+                  textAnchor="middle" fontSize={7} fill="var(--text-faint)"
+                  fontFamily="var(--font-mono)">
+                  {block.id} · {block.type}
+                </text>
               </g>
             )
           })}
 
-          {/* ── Station pillars ──────────────────────────────────────────── */}
-          {STATIONS.map((code) => {
-            const x = stationX(code, spacing)
-            const st = stationState[code]
-            const avail = st?.available_platforms ?? 2
-            const total = st?.num_platforms ?? 4
-            const utilPct = total > 0 ? (total - avail) / total : 0
-            const isFocusedStation = focusedBlock
-              ? (focusedBlock.includes(code))
-              : false
+          {/* ── Lane labels ───────────────────────────────────────────────── */}
+          {LANES.map(lane => (
+            <text key={`ll-${lane.type}`}
+              x={PAD_L - 8} y={CENTER_Y + lane.yOffset + 4}
+              textAnchor="end" fontSize={7} fill={TRAIN_LIGHT_COLORS[lane.type]}
+              fontFamily="var(--font-mono)" fontWeight="700" opacity={0.7}>
+              {lane.type.toUpperCase().slice(0, 4)}
+            </text>
+          ))}
+          <text x={PAD_L - 8} y={CENTER_Y + DEPT_OFFSET + 4}
+            textAnchor="end" fontSize={7} fill={TRAIN_LIGHT_COLORS['departmental']}
+            fontFamily="var(--font-mono)" fontWeight="700" opacity={0.7}>
+            DEPT
+          </text>
 
-            const stationFade = focusModeActive && !isFocusedStation ? 0.12 : 1
+          {/* ── Stations ──────────────────────────────────────────────────── */}
+          {STATIONS.map(code => {
+            const x   = stationX(code, spacing)
+            const st  = stationState[code]
+            const total = st?.num_platforms ?? 4
+            const occupants = st?.platform_occupants ?? {}
+            const isFocused = focusedBlock ? focusedBlock.includes(code) : false
+            const fadeOp = focusModeActive && !isFocused ? 0.12 : 1
 
             return (
-              <g key={code} style={{ opacity: stationFade, transition: 'opacity 0.25s ease' }}>
-                {/* Vertical pillar spanning all lanes */}
-                <line
-                  x1={x}
-                  y1={CENTER_Y - DEPARTMENTAL_OFFSET - 16}
-                  x2={x}
-                  y2={CENTER_Y + DEPARTMENTAL_OFFSET + 16}
-                  stroke="#243154"
-                  strokeWidth={1.5}
-                />
+              <g key={code} style={{ opacity: fadeOp, transition: 'opacity 0.25s ease' }}>
+                {/* Station pillar — spans all lanes */}
+                <line x1={x} y1={CENTER_Y - DEPT_OFFSET - 20}
+                  x2={x} y2={CENTER_Y + DEPT_OFFSET + 20}
+                  stroke="var(--ir-blue)" strokeWidth={1} strokeDasharray="4 3" opacity={0.35} />
 
-                {/* Platform utilisation strip */}
-                <rect
-                  x={x - 16}
-                  y={PAD_T + 4}
-                  width={32}
-                  height={6}
-                  rx={3}
-                  fill="#1A2540"
-                />
-                <rect
-                  x={x - 16}
-                  y={PAD_T + 4}
-                  width={32 * utilPct}
-                  height={6}
-                  rx={3}
-                  fill={utilPct > 0.8 ? '#FF5757' : utilPct > 0.5 ? '#FFB547' : '#20D97C'}
-                />
-
-                {/* Station node */}
-                <circle cx={x} cy={CENTER_Y} r={10} fill="#10192E" stroke="#4E7CFF" strokeWidth={1.5} />
-                <circle cx={x} cy={CENTER_Y} r={4} fill="#4E7CFF" />
-
-                {/* Station code (above) */}
-                <text
-                  x={x}
-                  y={PAD_T - 4}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fill="#E8EBF5"
-                  fontFamily="IBM Plex Mono, monospace"
-                  fontWeight="700"
-                >
+                {/* Station name plate */}
+                <rect x={x - 28} y={PAD_T - 20} width={56} height={16} rx={2}
+                  fill="var(--ir-blue)" />
+                <text x={x} y={PAD_T - 9} textAnchor="middle" fontSize={9.5} fill="white"
+                  fontFamily="var(--font-heading)" fontWeight="700" letterSpacing="0.04em">
                   {code}
                 </text>
-
-                {/* Station full name (below code) */}
-                <text
-                  x={x}
-                  y={PAD_T + 8}
-                  textAnchor="middle"
-                  fontSize={6.5}
-                  fill="#6B7A9E"
-                  fontFamily="Inter, sans-serif"
-                >
+                <text x={x} y={PAD_T + 2} textAnchor="middle" fontSize={6.5} fill="var(--text-muted)"
+                  fontFamily="var(--font-body)">
                   {STATION_NAMES[code]}
                 </text>
 
+                {/* Platform occupancy squares */}
+                <g transform={`translate(${x - (total * 10) / 2}, ${PAD_T + 8})`}>
+                  {Array.from({ length: total }, (_, i) => {
+                    const platId  = String(i + 1)
+                    const hasOcc  = occupants[platId] != null
+                    return (
+                      <g key={i}>
+                        <rect x={i * 10} y={0} width={8} height={8} rx={1}
+                          fill={hasOcc ? 'var(--safety-amber)' : 'var(--safety-green)'}
+                          stroke={hasOcc ? 'var(--safety-amber)' : 'var(--safety-green)'}
+                          strokeWidth={0.5} opacity={0.8} />
+                        <text x={i * 10 + 4} y={7} textAnchor="middle" fontSize={5}
+                          fill="white" fontFamily="var(--font-mono)" fontWeight="700">
+                          {platId}
+                        </text>
+                      </g>
+                    )
+                  })}
+                </g>
+
+                {/* Station node on center line */}
+                <circle cx={x} cy={CENTER_Y} r={8} fill="white"
+                  stroke="var(--ir-blue)" strokeWidth={2} />
+                <circle cx={x} cy={CENTER_Y} r={3.5} fill="var(--ir-blue)" />
+
                 {/* Km marker */}
-                <text
-                  x={x}
-                  y={SVG_H - 16}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fill="#6B7A9E"
-                  fontFamily="IBM Plex Mono, monospace"
-                >
+                <text x={x} y={SVG_H - 6} textAnchor="middle" fontSize={7}
+                  fill="var(--text-faint)" fontFamily="var(--font-mono)">
                   {STATION_KM[code]}km
                 </text>
               </g>
             )
           })}
 
-          {/* ── Signal indicators ──────────────────────────────────────── */}
-          {BLOCKS.map((block) => {
-            const midX = (stationX(block.from, spacing) + stationX(block.to, spacing)) / 2
-            const signalKey = Object.keys(signalStates).find((k) => k.includes(block.from) || k.includes(block.id))
-            const signalState = signalKey ? signalStates[signalKey] : 'green'
-            const sigColor = getSignalColor(signalState)
-
+          {/* ── Train markers ─────────────────────────────────────────────── */}
+          {trainList.map(t => {
+            const x         = trainX(t, spacing)
+            const isConflict = conflictTrainIds.has(t.id)
+            const isFocused  = focusedTrainIds.has(t.id)
             return (
-              <g key={`sig-${block.id}`}>
-                <rect x={midX - 4} y={CENTER_Y - 20} width={8} height={14} rx={2} fill="#0B1328" stroke="#243154" strokeWidth={1} />
-                <circle cx={midX} cy={CENTER_Y - 15} r={3} fill={sigColor} opacity={0.9} />
-              </g>
-            )
-          })}
-
-          {/* ── Train markers (grouped) ────────────────────────────────── */}
-          {trainGroups.map((group) => {
-            const isConflict = group.trains.some((t) => conflictTrainIds.has(t.id))
-            const isFocused = focusedConflict
-              ? group.trains.some((t) => focusedTrainIds.has(t.id))
-              : false
-
-            return (
-              <TrainGroupMarker
-                key={group.groupKey}
-                group={group}
+              <TrainMarker
+                key={t.id}
+                train={t}
+                x={x}
                 isConflict={isConflict}
-                focusMode={focusModeActive}
                 isFocused={isFocused}
+                focusMode={focusModeActive}
+                onSelect={() => {}}
               />
             )
           })}
 
-          {/* ── Block state key (bottom right) ───────────────────────── */}
+          {/* ── Legend (bottom-right) ─────────────────────────────────────── */}
           <g>
             {[
-              { color: '#20D97C', label: 'Free' },
-              { color: '#4E7CFF', label: 'Occupied' },
-              { color: '#FF5757', label: 'Conflict' },
+              { color: 'var(--safety-green)', label: 'Free' },
+              { color: 'var(--safety-amber)', label: 'Occupied' },
+              { color: 'var(--safety-red)',   label: 'Conflict' },
             ].map(({ color, label }, i) => (
-              <g key={label} transform={`translate(${W - PAD_R - 120 + i * 40}, ${SVG_H - 10})`}>
+              <g key={label} transform={`translate(${W - PAD_R - 160 + i * 58}, ${SVG_H - 6})`}>
                 <line x1={0} y1={0} x2={14} y2={0} stroke={color} strokeWidth={3} strokeLinecap="round" />
-                <text x={18} y={4} fontSize={7} fill="#6B7A9E" fontFamily="IBM Plex Mono, monospace">
-                  {label}
-                </text>
+                <text x={18} y={4} fontSize={7} fill="var(--text-muted)" fontFamily="var(--font-mono)">{label}</text>
               </g>
             ))}
           </g>
         </svg>
       </div>
 
-      {/* Lane legend */}
-      <div
-        className="flex flex-wrap gap-4 px-4 py-3 border-t text-xs"
-        style={{ borderColor: 'var(--border)' }}
-      >
-        {LANES.map((lane) => (
-          <div key={lane.type} className="flex items-center gap-1.5">
-            <span className="inline-block w-4 h-1.5 rounded" style={{ background: TRAIN_TYPE_COLORS[lane.type] }} />
-            <span style={{ color: 'var(--text-muted)' }}>{lane.label}</span>
+      {/* ── Timeline Slider ───────────────────────────────────────────────── */}
+      <div style={{
+        padding: '6px 16px 6px',
+        borderTop: '1px solid var(--border)',
+        background: 'var(--bg-row-alt)',
+        display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0,
+      }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+          CONFLICT PREVIEW
+        </span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--safety-green)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+          NOW
+        </span>
+        <input
+          type="range" min={0} max={30} step={1} value={previewOffset}
+          onChange={e => setPreviewOffset(Number(e.target.value))}
+          style={{ flex: 1, accentColor: 'var(--ir-blue)', cursor: 'pointer' }}
+        />
+        <span style={{
+          fontFamily: 'var(--font-mono)', fontSize: '0.65rem', fontWeight: 700,
+          color: previewOffset > 0 ? 'var(--safety-amber)' : 'var(--text-faint)',
+          whiteSpace: 'nowrap',
+          minWidth: 52,
+        }}>
+          {previewOffset > 0 ? `T+${previewOffset}min` : 'Drag →'}
+        </span>
+
+        {/* Lane legend */}
+        {[
+          { color: TRAIN_LIGHT_COLORS.rajdhani, label: 'Rajdhani/VB' },
+          { color: TRAIN_LIGHT_COLORS.express,  label: 'Express' },
+          { color: TRAIN_LIGHT_COLORS.passenger, label: 'Passenger' },
+          { color: TRAIN_LIGHT_COLORS.freight,   label: 'Freight' },
+        ].map(({ color, label }) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+            <span style={{ width: 14, height: 3, borderRadius: 1, background: color, display: 'inline-block' }} />
+            <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)', whiteSpace: 'nowrap' }}>{label}</span>
           </div>
         ))}
-        <div className="flex items-center gap-1.5">
-          <span className="inline-block w-4 h-1.5 rounded" style={{ background: TRAIN_TYPE_COLORS['departmental'] }} />
-          <span style={{ color: 'var(--text-muted)' }}>Departmental</span>
-        </div>
-        {focusModeActive && (
-          <span className="ml-auto text-xs" style={{ color: 'var(--warning)', fontFamily: 'var(--font-mono)' }}>
-            Focus Mode — press ESC to exit
-          </span>
-        )}
       </div>
 
       <style>{`
         @keyframes track-flow {
           from { stroke-dashoffset: 0; }
-          to { stroke-dashoffset: -28; }
+          to   { stroke-dashoffset: -24; }
         }
-        @keyframes pulse-ring {
+        @keyframes pulse-conflict {
           0%, 100% { opacity: 0.5; }
           50%       { opacity: 1; }
         }

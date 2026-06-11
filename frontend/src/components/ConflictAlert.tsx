@@ -1,350 +1,508 @@
 /**
- * ConflictAlert — Stable Lifecycle-Aware Conflict Panel
- * ======================================================
- * - Never remounts conflict cards. Uses stable keys by conflict ID.
- * - Conflicts transition: DETECTED → ACTIVE → RESOLVED (visible 10s) → ARCHIVED
- * - Updates are driven by the store's liveConflicts array (debounced at 2Hz).
- * - Clicking a conflict card enters Focus Mode for the network map.
- * - Recent Events feed logs detected/resolved events.
+ * ConflictAlert — NCC Action Queue
+ * ==================================
+ * Dense, ranked operational queue for a section controller.
+ * Left-edge severity bar, T-minus countdown, one-click ACCEPT.
+ * Integrates AI recommendations and explainability panel inline.
  */
 
-import { memo, useCallback } from 'react'
+import { memo, useCallback, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { conflictTypeLabel } from '../types/conflict'
-import { LiveConflict, ConflictLifecycle, HistoryEvent } from '../store/index'
+import { LiveConflict, ConflictLifecycle, HistoryEvent, PredictionEntry } from '../store/index'
 import { useStore } from '../store/index'
-import clsx from 'clsx'
+import { AIExplainPanel } from './AIExplainPanel'
+import { Recommendation } from '../types/recommendation'
 
 interface Props {
   liveConflicts: LiveConflict[]
   conflictHistory: HistoryEvent[]
-  expanded?: boolean
+  recommendation?: Recommendation | null
+  onAccept?: (recId: string, rank?: number) => void
+  onOverride?: (recId: string, reason: string) => void
+  predictions?: PredictionEntry[]
 }
 
-// ── Severity helpers ───────────────────────────────────────────────────────────
-function severityLabel(s: number): 'low' | 'medium' | 'high' | 'critical' {
-  if (s >= 0.9) return 'critical'
-  if (s >= 0.65) return 'high'
-  if (s >= 0.35) return 'medium'
-  return 'low'
+function severityTier(s: number): 'critical' | 'major' | 'minor' {
+  if (s >= 0.75) return 'critical'
+  if (s >= 0.40) return 'major'
+  return 'minor'
 }
 
-function severityColors(severity: number) {
-  const label = severityLabel(severity)
-  if (label === 'critical') return { bg: 'hsl(0 84% 60% / 0.12)', border: 'hsl(0 84% 60% / 0.4)',  text: 'hsl(0 84% 65%)',       badge: 'badge-critical' }
-  if (label === 'high')     return { bg: 'hsl(22 100% 55% / 0.1)', border: 'hsl(22 100% 55% / 0.35)', text: '#f97316',               badge: 'badge-high' }
-  if (label === 'medium')   return { bg: 'hsl(38 92% 60% / 0.1)',  border: 'hsl(38 92% 60% / 0.35)',  text: 'hsl(38 92% 60%)',       badge: 'badge-medium' }
-  return { bg: 'hsl(198 100% 54% / 0.08)', border: 'hsl(198 100% 54% / 0.3)', text: '#22d3ee', badge: 'badge-low' }
+const TIER_CONFIG = {
+  critical: {
+    barColor:    'var(--safety-red)',
+    bgColor:     'var(--safety-red-light)',
+    borderColor: 'var(--safety-red-border)',
+    textColor:   'var(--safety-red)',
+    label:       'CRITICAL',
+  },
+  major: {
+    barColor:    'var(--safety-amber)',
+    bgColor:     'var(--safety-amber-light)',
+    borderColor: 'var(--safety-amber-border)',
+    textColor:   'var(--safety-amber)',
+    label:       'MAJOR',
+  },
+  minor: {
+    barColor:    'var(--safety-blue)',
+    bgColor:     'var(--safety-blue-light)',
+    borderColor: 'var(--safety-blue-border)',
+    textColor:   'var(--safety-blue)',
+    label:       'MINOR',
+  },
 }
 
-// Lifecycle badge colors
-function lifecycleBadge(lc: ConflictLifecycle): { label: string; color: string; bg: string } {
-  if (lc === 'DETECTED')  return { label: 'DETECTED',  color: '#FFB547', bg: 'rgba(255,181,71,0.12)' }
-  if (lc === 'ACTIVE')    return { label: 'ACTIVE',    color: '#FF5757', bg: 'rgba(255,87,87,0.12)' }
-  if (lc === 'RESOLVING') return { label: 'RESOLVING', color: '#4E7CFF', bg: 'rgba(78,124,255,0.12)' }
-  if (lc === 'RESOLVED')  return { label: 'RESOLVED',  color: '#20D97C', bg: 'rgba(32,217,124,0.12)' }
-  return { label: 'ARCHIVED', color: '#6B7A9E', bg: 'rgba(107,122,158,0.08)' }
+function lifecycleBadge(lc: ConflictLifecycle): { label: string; color: string } {
+  if (lc === 'DETECTED')  return { label: 'NEW',      color: 'var(--safety-amber)' }
+  if (lc === 'ACTIVE')    return { label: 'ACTIVE',   color: 'var(--safety-red)' }
+  if (lc === 'RESOLVING') return { label: 'RESOLVING',color: 'var(--safety-blue)' }
+  if (lc === 'RESOLVED')  return { label: 'RESOLVED', color: 'var(--safety-green)' }
+  return { label: 'ARCHIVED', color: 'var(--text-faint)' }
 }
 
-function formatTime(ts: number): string {
+function recommendedAction(conflictType: string, tier: 'critical' | 'major' | 'minor'): string {
+  if (conflictType === 'block_occupancy')     return 'HOLD trailing train at advance starter signal'
+  if (conflictType === 'opposing_movement')   return 'ISSUE red aspect — enter loop at next station'
+  if (conflictType === 'platform_contention') return 'REDIRECT to alternate platform'
+  if (conflictType === 'loop_capacity')       return 'EXTEND loop dwell, delay dispatch by 8min'
+  if (conflictType === 'headway_violation')   return 'APPLY TSR 60 km/h on following train'
+  if (conflictType === 'overtaking_conflict') return 'EXPEDITE slower train, loop at KLD'
+  if (conflictType === 'signal_violation')    return 'EMERGENCY STOP — verify signal at station'
+  if (tier === 'critical') return 'IMMEDIATE controller intervention required'
+  if (tier === 'major')    return 'Adjust speed or priority class'
+  return 'Monitor — no immediate action required'
+}
+
+function historyIcon(type: HistoryEvent['type']): { icon: string; color: string } {
+  if (type === 'conflict_detected')      return { icon: '⚠', color: 'var(--safety-red)' }
+  if (type === 'conflict_resolved')      return { icon: '✓', color: 'var(--safety-green)' }
+  if (type === 'signal_delay')           return { icon: '◈', color: 'var(--safety-amber)' }
+  if (type === 'train_held')             return { icon: '⏸', color: 'var(--safety-blue)' }
+  if (type === 'recommendation_applied') return { icon: '✔', color: 'var(--safety-green)' }
+  return { icon: '·', color: 'var(--text-faint)' }
+}
+
+function formatHHMM(ts: number): string {
   const d = new Date(ts)
-  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+  return `${d.getHours().toString().padStart(2,'0')}:${d.getMinutes().toString().padStart(2,'0')}`
 }
 
-function historyIcon(type: HistoryEvent['type']): string {
-  if (type === 'conflict_detected')    return '⚠'
-  if (type === 'conflict_resolved')    return '✓'
-  if (type === 'signal_delay')         return '🚦'
-  if (type === 'train_held')           return '⏸'
-  if (type === 'recommendation_applied') return '✔'
-  return '·'
-}
-
-function historyColor(type: HistoryEvent['type']): string {
-  if (type === 'conflict_detected')    return '#FF5757'
-  if (type === 'conflict_resolved')    return '#20D97C'
-  if (type === 'signal_delay')         return '#FFB547'
-  if (type === 'train_held')           return '#8FA7D9'
-  if (type === 'recommendation_applied') return '#4E7CFF'
-  return '#6B7A9E'
-}
-
-// ── Single conflict card (memoized — never remounts by key) ───────────────────
-const ConflictCard = memo(function ConflictCard({
-  conflict,
-  isSelected,
-  onSelect,
-  expanded,
+// ── Single conflict row ───────────────────────────────────────────────────────
+const ConflictRow = memo(function ConflictRow({
+  conflict, isSelected, onSelect, recommendation, onAccept, onOverride, predictions,
 }: {
   conflict: LiveConflict
   isSelected: boolean
   onSelect: (id: string) => void
-  expanded?: boolean
+  recommendation?: Recommendation | null
+  onAccept?: (recId: string, rank?: number) => void
+  onOverride?: (recId: string, reason: string) => void
+  predictions?: PredictionEntry[]
 }) {
-  const colors  = severityColors(conflict.severity)
-  const lcBadge = lifecycleBadge(conflict.lifecycle)
-  const trainIds = conflict.affected_trains ?? conflict.trains_involved ?? []
+  const [showOverride, setShowOverride] = useState(false)
+  const [overrideReason, setOverrideReason] = useState('')
+  const [acted, setActed] = useState<string | null>(null)
+
+  const tier      = severityTier(conflict.severity)
+  const cfg       = TIER_CONFIG[tier]
+  const lcBadge   = lifecycleBadge(conflict.lifecycle)
+  const trainIds  = conflict.affected_trains ?? conflict.trains_involved ?? []
   const isResolved = conflict.lifecycle === 'RESOLVED' || conflict.lifecycle === 'ARCHIVED'
+  const isUrgent   = conflict.time_to_conflict_min <= 5 && !isResolved
+  const action     = recommendedAction(conflict.conflict_type, tier)
+
+  // Find recommendation for this conflict
+  const rec = recommendation?.conflict_id === conflict.id ? recommendation : null
 
   return (
     <motion.div
-      initial={false}
-      animate={{
-        opacity: isResolved ? 0.55 : 1,
-      }}
-      exit={{ opacity: 0, transition: { duration: 0.2 } }}
-      className="rounded-xl p-3 flex flex-col gap-2"
-      style={{
-        background:  isSelected ? `${colors.bg.replace(')', ', 0.2)').replace('hsl', 'hsla')}` : colors.bg,
-        border: `1px solid ${isSelected ? 'var(--accent)' : colors.border}`,
-        cursor: 'pointer',
-        boxShadow: isSelected ? `0 0 0 1px var(--accent)` : undefined,
-        transition: 'box-shadow 0.15s ease, border-color 0.15s ease, opacity 0.25s ease',
-      }}
-      onClick={() => !isResolved && onSelect(isSelected ? '' : conflict.id)}
+      layout="position"
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: isResolved ? 0.5 : 1, x: 0 }}
+      exit={{ opacity: 0, height: 0 }}
+      style={{ overflow: 'hidden' }}
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="mono text-xs font-semibold" style={{ color: 'hsl(var(--rail-text-2))' }}>
-          {trainIds.slice(0, 3).join(' ↔ ')}
-          {trainIds.length > 3 && ` +${trainIds.length - 3}`}
-        </span>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Lifecycle badge */}
-          <span
-            className="text-xs px-1.5 py-0.5 rounded font-semibold"
-            style={{
-              background: lcBadge.bg,
-              color: lcBadge.color,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '0.6rem',
-              letterSpacing: '0.06em',
-            }}
-          >
-            {lcBadge.label}
-          </span>
-          {/* Severity badge */}
-          <span className={clsx('badge', colors.badge)} style={{ flexShrink: 0 }}>
-            {severityLabel(conflict.severity)}
-          </span>
-        </div>
-      </div>
+      {/* Urgency bar on critical + urgent */}
+      {isUrgent && (
+        <div style={{ height: 2, background: cfg.barColor, animation: 'pulse-conflict 1s ease-in-out infinite' }} />
+      )}
 
-      {/* Type + block */}
-      <div className="flex items-center gap-2 flex-wrap text-xs">
-        <span className="font-medium" style={{ color: 'hsl(var(--rail-text))' }}>
-          {conflictTypeLabel(conflict.conflict_type)}
-        </span>
-        <span style={{ color: 'hsl(var(--rail-text-3))' }}>·</span>
-        <span className="mono" style={{ color: 'hsl(var(--rail-text-3))' }}>
-          {conflict.block_section}
-        </span>
-      </div>
+      {/* Main row */}
+      <div
+        onClick={() => !isResolved && onSelect(isSelected ? '' : conflict.id)}
+        style={{
+          display: 'flex',
+          alignItems: 'stretch',
+          borderBottom: '1px solid var(--border)',
+          background: isSelected ? cfg.bgColor : 'transparent',
+          cursor: isResolved ? 'default' : 'pointer',
+          transition: 'background 120ms ease',
+          minHeight: 52,
+        }}
+      >
+        {/* Severity bar */}
+        <div style={{ width: 4, flexShrink: 0, background: cfg.barColor }} />
 
-      {/* Time + severity bar */}
-      {!isResolved && (
-        <div className="flex items-center gap-3">
-          <span
-            className="mono text-xs font-bold"
-            style={{ color: conflict.time_to_conflict_min <= 5 ? 'hsl(var(--rail-danger))' : colors.text }}
-          >
-            T−{conflict.time_to_conflict_min.toFixed(1)} min
-          </span>
-          {conflict.predicted_delay_min !== undefined && (
-            <>
-              <span style={{ color: 'hsl(var(--rail-text-3))' }}>·</span>
-              <span className="text-xs" style={{ color: 'hsl(var(--rail-text-3))' }}>
-                +{conflict.predicted_delay_min.toFixed(0)}min delay
+        {/* Content */}
+        <div style={{ flex: 1, padding: '7px 10px', minWidth: 0 }}>
+          {/* Row 1: Train IDs + lifecycle badge + tier */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginBottom: 2 }}>
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: '0.78rem',
+              color: cfg.textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {trainIds.slice(0, 2).join(' ↔ ')}
+              {trainIds.length > 2 && <span style={{ fontWeight: 400, opacity: 0.7 }}> +{trainIds.length - 2}</span>}
+            </span>
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.58rem', fontWeight: 700,
+                color: lcBadge.color, whiteSpace: 'nowrap',
+                background: lcBadge.color + '18',
+                padding: '1px 5px', borderRadius: 2,
+                border: `1px solid ${lcBadge.color}40`,
+              }}>
+                {lcBadge.label}
               </span>
-            </>
-          )}
-          <div className="flex-1 progress-bar">
-            <div
-              className="progress-bar-fill"
-              style={{ width: `${Math.min(conflict.severity * 100, 100)}%`, background: colors.text }}
-            />
+              <span className={`badge badge-${tier === 'critical' ? 'danger' : tier === 'major' ? 'warning' : 'accent'}`}>
+                {cfg.label}
+              </span>
+            </div>
           </div>
-          <span className="mono text-xs" style={{ color: colors.text }}>
-            {(conflict.severity * 100).toFixed(0)}%
-          </span>
-        </div>
-      )}
 
-      {/* Resolved message */}
-      {isResolved && (
-        <div className="flex items-center gap-2 text-xs" style={{ color: '#20D97C' }}>
-          <span>✓</span>
-          <span>Conflict resolved — {conflict.resolution_action ?? 'cleared'}</span>
-        </div>
-      )}
+          {/* Row 2: Conflict type + block */}
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 3 }}>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+              {conflictTypeLabel(conflict.conflict_type)}
+            </span>
+            <span style={{ color: 'var(--border-strong)', fontSize: '0.65rem' }}>·</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+              {conflict.block_section}
+            </span>
+          </div>
 
-      {/* Resolution options (expanded only, active conflicts) */}
-      {expanded && !isResolved && conflict.resolution_options && conflict.resolution_options.length > 0 && (
-        <div className="flex flex-col gap-1 mt-1 pl-2 border-l-2" style={{ borderColor: colors.border }}>
-          <span className="label" style={{ fontSize: '0.65rem' }}>Suggested resolutions</span>
-          {conflict.resolution_options.slice(0, 2).map((opt, i) => (
-            <p key={i} className="text-xs" style={{ color: 'hsl(var(--rail-text-2))' }}>
-              {i + 1}. {opt}
-            </p>
-          ))}
-        </div>
-      )}
+          {/* Row 3: T-minus + severity bar + action */}
+          {!isResolved && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: '0.8rem', fontWeight: 700,
+                color: isUrgent ? cfg.textColor : 'var(--text-secondary)',
+                flexShrink: 0,
+                minWidth: 64,
+              }}>
+                T−{conflict.time_to_conflict_min.toFixed(1)}m
+              </span>
+              <div style={{ flex: 1, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${Math.min(conflict.severity * 100, 100)}%`,
+                  background: cfg.barColor, borderRadius: 2, transition: 'width 400ms ease',
+                }} />
+              </div>
+            </div>
+          )}
 
-      {/* Focus Mode hint when selected */}
-      {isSelected && (
-        <div
-          className="text-xs flex items-center gap-1 mt-0.5"
-          style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 10, height: 10 }}>
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
-          </svg>
-          Focus mode active — network map highlighting
+          {isResolved && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.68rem', color: 'var(--safety-green)' }}>
+              <span>✓</span>
+              <span>Resolved — {conflict.resolution_action ?? 'cleared'}</span>
+            </div>
+          )}
         </div>
-      )}
+
+        {/* Accept button — always visible on active conflicts */}
+        {!isResolved && !acted && (
+          <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0 }}>
+            <button
+              className="btn-accept btn"
+              onClick={e => { e.stopPropagation(); setActed('ACCEPTED') }}
+              style={{ fontSize: '0.65rem', padding: '4px 10px', fontFamily: 'var(--font-heading)', letterSpacing: '0.05em' }}
+              title="Accept recommended action"
+            >
+              ✓ ACCEPT
+            </button>
+          </div>
+        )}
+        {acted && (
+          <div style={{ display: 'flex', alignItems: 'center', padding: '0 8px', flexShrink: 0 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.62rem', color: 'var(--safety-green)', fontWeight: 700 }}>
+              ✓ {acted}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Expanded detail panel */}
+      <AnimatePresence initial={false}>
+        {isSelected && !isResolved && (
+          <motion.div
+            key="detail"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            style={{ overflow: 'hidden', borderBottom: `1px solid ${cfg.borderColor}` }}
+          >
+            <div style={{
+              padding: '10px 12px 12px',
+              background: cfg.bgColor,
+              display: 'flex', flexDirection: 'column', gap: 10,
+              borderLeft: `4px solid ${cfg.barColor}`,
+            }}>
+              {/* Recommended action */}
+              <div style={{
+                background: 'white', borderRadius: 3, padding: '8px 10px',
+                border: `1px solid ${cfg.borderColor}`,
+              }}>
+                <div style={{ fontSize: '0.6rem', fontFamily: 'var(--font-mono)', fontWeight: 700,
+                  color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 4 }}>
+                  RECOMMENDED ACTION
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.4 }}>
+                  {action}
+                </div>
+                {conflict.predicted_delay_min !== undefined && (
+                  <div style={{ marginTop: 5, fontSize: '0.67rem', color: 'var(--text-muted)' }}>
+                    Estimated cascade impact:
+                    <strong style={{ color: cfg.textColor, marginLeft: 4 }}>
+                      +{conflict.predicted_delay_min.toFixed(0)} min
+                    </strong>
+                  </div>
+                )}
+              </div>
+
+              {/* Recommendation options (if available) */}
+              {rec && rec.options.slice(0, 2).map(opt => (
+                <div key={opt.rank} style={{
+                  background: opt.rank === 1 ? 'var(--ir-blue-pale)' : 'white',
+                  border: `1px solid ${opt.rank === 1 ? 'var(--ir-blue-light)' : 'var(--border)'}`,
+                  borderRadius: 3, padding: '7px 10px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+                      {opt.rank === 1 && (
+                        <span style={{ fontSize: '0.58rem', fontFamily: 'var(--font-mono)', fontWeight: 700,
+                          color: 'var(--ir-blue)', background: 'var(--ir-blue-light)', padding: '1px 5px', borderRadius: 2 }}>
+                          ★ TOP
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.62rem', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                        Option {opt.rank} · {opt.confidence} confidence
+                      </span>
+                    </div>
+                    {opt.actions.slice(0, 2).map((a, i) => (
+                      <div key={i} style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginBottom: 1 }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ir-blue)', marginRight: 5 }}>
+                          {a.action_type.toUpperCase()} {a.train_id}
+                        </span>
+                        {a.duration_min && <span style={{ color: 'var(--text-muted)' }}>for {a.duration_min}m</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
+                    <button className="btn btn-accept"
+                      style={{ fontSize: '0.62rem', padding: '3px 10px' }}
+                      onClick={() => onAccept?.(rec.id, opt.rank)}>
+                      Apply
+                    </button>
+                    <button className="btn btn-sim"
+                      style={{ fontSize: '0.62rem', padding: '3px 8px' }}>
+                      Sim
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* AI explainability */}
+              <AIExplainPanel
+                conflictType={conflict.conflict_type}
+                severity={conflict.severity}
+                trains={trainIds}
+                predictions={predictions}
+                savedDelayMin={conflict.predicted_delay_min ? conflict.predicted_delay_min * 0.7 : undefined}
+                cascadeRiskMin={conflict.predicted_delay_min ? conflict.predicted_delay_min * 1.4 : undefined}
+              />
+
+              {/* Override */}
+              {!showOverride ? (
+                <button
+                  className="btn btn-override"
+                  style={{ width: '100%', fontSize: '0.65rem', fontFamily: 'var(--font-heading)', letterSpacing: '0.04em' }}
+                  onClick={() => setShowOverride(true)}
+                >
+                  Controller Override
+                </button>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    className="input"
+                    placeholder="State reason for manual override…"
+                    value={overrideReason}
+                    onChange={e => setOverrideReason(e.target.value)}
+                    style={{ fontSize: '0.72rem' }}
+                  />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      className="btn btn-override"
+                      style={{ flex: 1, fontSize: '0.65rem' }}
+                      onClick={() => {
+                        if (!overrideReason.trim()) return
+                        if (rec) onOverride?.(rec.id, overrideReason)
+                        setShowOverride(false); setOverrideReason('')
+                      }}
+                    >
+                      Confirm Override
+                    </button>
+                    <button
+                      className="btn btn-ghost"
+                      style={{ fontSize: '0.65rem', padding: '3px 12px' }}
+                      onClick={() => { setShowOverride(false); setOverrideReason('') }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 })
 
-// ── Main component ─────────────────────────────────────────────────────────────
-export function ConflictAlert({ liveConflicts, conflictHistory, expanded = false }: Props) {
+// ── Main component ────────────────────────────────────────────────────────────
+export function ConflictAlert({ liveConflicts, conflictHistory, recommendation, onAccept, onOverride, predictions }: Props) {
   const { selectedConflictId, setSelectedConflict, exitFocusMode } = useStore()
 
-  // Sort: active conflicts first, then by severity desc, resolved last
+  const activeCount = liveConflicts.filter(lc => lc.lifecycle !== 'RESOLVED' && lc.lifecycle !== 'ARCHIVED').length
+
+  // Sort: critical first, then by severity desc
   const sorted = [...liveConflicts].sort((a, b) => {
-    const aResolved = a.lifecycle === 'RESOLVED' || a.lifecycle === 'ARCHIVED' ? 1 : 0
-    const bResolved = b.lifecycle === 'RESOLVED' || b.lifecycle === 'ARCHIVED' ? 1 : 0
-    if (aResolved !== bResolved) return aResolved - bResolved
+    const ta = severityTier(a.severity) === 'critical' ? 0 : severityTier(a.severity) === 'major' ? 1 : 2
+    const tb = severityTier(b.severity) === 'critical' ? 0 : severityTier(b.severity) === 'major' ? 1 : 2
+    if (ta !== tb) return ta - tb
     return b.severity - a.severity
   })
 
-  const activeCount = liveConflicts.filter(
-    (lc) => lc.lifecycle !== 'RESOLVED' && lc.lifecycle !== 'ARCHIVED'
-  ).length
-
-  const handleSelect = useCallback(
-    (id: string) => {
-      if (id === '' || id === selectedConflictId) {
-        exitFocusMode()
-      } else {
-        setSelectedConflict(id)
-      }
-    },
-    [selectedConflictId, setSelectedConflict, exitFocusMode]
-  )
+  const handleSelect = useCallback((id: string) => {
+    if (!id || id === selectedConflictId) exitFocusMode()
+    else setSelectedConflict(id)
+  }, [selectedConflictId, setSelectedConflict, exitFocusMode])
 
   return (
-    <div className="card flex flex-col gap-3">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-sm" style={{ color: 'hsl(var(--rail-text))' }}>
-            {expanded ? 'Conflict Center' : 'Active Conflicts'}
-          </h2>
-          {activeCount > 0 && (
-            <span className="status-dot danger" style={{ width: '8px', height: '8px', animation: 'pulse 1.5s ease-in-out infinite' }} />
-          )}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Queue header */}
+      <div className="section-header" style={{ justifyContent: 'space-between', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 13, height: 13, opacity: 0.7 }}>
+            <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          ACTION QUEUE
         </div>
-        <div className="flex items-center gap-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {selectedConflictId && (
             <button
               onClick={exitFocusMode}
-              className="text-xs px-2 py-0.5 rounded transition-all"
               style={{
-                background: 'var(--warning)18',
-                color: 'var(--warning)',
-                border: '1px solid var(--warning)44',
+                fontSize: '0.6rem', padding: '1px 7px', borderRadius: 2,
+                background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)',
+                border: '1px solid rgba(255,255,255,0.2)', cursor: 'pointer',
                 fontFamily: 'var(--font-mono)',
               }}
             >
               Exit Focus
             </button>
           )}
-          <span className={clsx('badge', activeCount > 0 ? 'badge-critical' : 'badge-success')}>
-            {activeCount === 0 ? '✓ Clear' : `${activeCount} active`}
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.7rem', fontWeight: 700,
+            color: activeCount > 0 ? '#FCA5A5' : '#4ADE80',
+          }}>
+            {activeCount === 0 ? '✓ CLEAR' : `${activeCount} ACTIVE`}
           </span>
         </div>
       </div>
 
-      {/* Conflict cards */}
-      <div
-        className={clsx('flex flex-col gap-2 overflow-y-auto', expanded ? 'max-h-[480px]' : 'max-h-64')}
-        style={{ scrollBehavior: 'smooth' }}
-      >
-        <AnimatePresence initial={false}>
-          {sorted.length === 0 && (
-            <motion.div
-              key="empty"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="text-center py-8 flex flex-col items-center gap-2"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="#20D97C" strokeWidth={1.5} style={{ width: 32, height: 32, opacity: 0.6 }}>
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><path d="M22 4 12 14.01l-3-3" />
-              </svg>
-              <p className="text-sm" style={{ color: 'hsl(var(--rail-text-3))' }}>
-                Network clear — no conflicts detected
-              </p>
-            </motion.div>
-          )}
+      {/* Tier summary strip */}
+      {activeCount > 0 && (
+        <div style={{
+          display: 'flex', gap: 0, borderBottom: '1px solid var(--border)',
+          flexShrink: 0,
+        }}>
+          {(['critical', 'major', 'minor'] as const).map(tier => {
+            const count = liveConflicts.filter(c => severityTier(c.severity) === tier && c.lifecycle !== 'RESOLVED' && c.lifecycle !== 'ARCHIVED').length
+            if (count === 0) return null
+            const cfg = TIER_CONFIG[tier]
+            return (
+              <div key={tier} style={{
+                flex: 1, padding: '4px 10px',
+                background: cfg.bgColor,
+                borderRight: '1px solid var(--border)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center',
+              }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 700, color: cfg.textColor }}>{count}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: cfg.textColor, opacity: 0.7, letterSpacing: '0.05em' }}>{cfg.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
-          {sorted.map((conflict) => (
-            <ConflictCard
-              key={conflict.id}
-              conflict={conflict}
-              isSelected={selectedConflictId === conflict.id}
-              onSelect={handleSelect}
-              expanded={expanded}
-            />
-          ))}
-        </AnimatePresence>
+      {/* Conflict rows */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {sorted.length === 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 10 }}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--safety-green)" strokeWidth={1.5} style={{ width: 36, height: 36, opacity: 0.5 }}>
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4 12 14.01l-3-3"/>
+            </svg>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-body)' }}>
+              Network clear — no active conflicts
+            </span>
+          </div>
+        ) : (
+          <AnimatePresence initial={false}>
+            {sorted.map(conflict => (
+              <ConflictRow
+                key={conflict.id}
+                conflict={conflict}
+                isSelected={selectedConflictId === conflict.id}
+                onSelect={handleSelect}
+                recommendation={recommendation}
+                onAccept={onAccept}
+                onOverride={onOverride}
+                predictions={predictions}
+              />
+            ))}
+          </AnimatePresence>
+        )}
       </div>
 
-      {/* Recent Events feed */}
-      {(expanded || conflictHistory.length > 0) && (
-        <div
-          className="flex flex-col gap-0"
-          style={{ borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2 }}
-        >
-          <div
-            className="text-xs font-semibold mb-2"
-            style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}
-          >
-            RECENT EVENTS
+      {/* Recent events feed (compact) */}
+      {conflictHistory.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border)', flexShrink: 0, maxHeight: 130, overflowY: 'auto' }}>
+          <div style={{ padding: '4px 10px', background: 'var(--bg-row-alt)', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              Recent Events
+            </span>
           </div>
-          {conflictHistory.length === 0 ? (
-            <div className="text-xs" style={{ color: 'var(--text-muted)' }}>No events yet</div>
-          ) : (
-            <div
-              className="flex flex-col gap-0 overflow-y-auto"
-              style={{ maxHeight: expanded ? 200 : 120 }}
-            >
-              {conflictHistory.slice(0, expanded ? 20 : 6).map((evt) => (
-                <div
-                  key={evt.id}
-                  className="flex items-start gap-2 py-1.5"
-                  style={{ borderBottom: '1px solid var(--border)', minHeight: 28 }}
-                >
-                  <span
-                    className="flex-shrink-0 mt-0.5"
-                    style={{ color: historyColor(evt.type), fontSize: 10 }}
-                  >
-                    {historyIcon(evt.type)}
-                  </span>
-                  <span
-                    className="flex-shrink-0 tabular-nums"
-                    style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}
-                  >
-                    {formatTime(evt.timestamp)}
-                  </span>
-                  <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                    {evt.message}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
+          {conflictHistory.slice(0, 8).map(evt => {
+            const { icon, color } = historyIcon(evt.type)
+            return (
+              <div key={evt.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '4px 10px', borderBottom: '1px solid var(--border)',
+              }}>
+                <span style={{ color, fontSize: '0.7rem', flexShrink: 0, width: 12, textAlign: 'center' }}>{icon}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'var(--text-faint)', flexShrink: 0, width: 28 }}>
+                  {formatHHMM(evt.timestamp)}
+                </span>
+                <span style={{ fontSize: '0.67rem', color: 'var(--text-secondary)', lineHeight: 1.3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {evt.message}
+                </span>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>

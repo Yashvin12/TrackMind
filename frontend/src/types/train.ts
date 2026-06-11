@@ -1,5 +1,5 @@
 export type TrainType = 'rajdhani' | 'express' | 'passenger' | 'freight' | 'departmental'
-export type PriorityClass = 5 | 3 | 2 | 1 | 0
+export type PriorityClass = 1 | 2 | 3 | 4 | 5 | 6
 export type TrainStatus = 'waiting' | 'running' | 'dwelling' | 'stopped' | 'completed'
 
 export interface Train {
@@ -26,6 +26,9 @@ export interface Train {
   max_speed_kmh?: number
   dwell_remaining_sec?: number
   assigned_platform?: number | null
+  platform?: number | null          // current occupied platform
+  eta_next_station?: string         // HH:MM string
+  next_station?: string
 
   // Performance
   current_delay_min: number
@@ -34,18 +37,20 @@ export interface Train {
   loco_power_kw?: number
 }
 
-export const PRIORITY_LABELS: Record<PriorityClass, string> = {
-  5: 'Rajdhani',
-  3: 'Express',
-  2: 'Passenger',
-  1: 'Freight',
-  0: 'Departmental',
+export const PRIORITY_LABELS: Record<number, string> = {
+  1: 'Emergency',
+  2: 'VVIP/Special',
+  3: 'Rajdhani/VB',
+  4: 'Express/Mail',
+  5: 'Passenger',
+  6: 'Freight',
 }
 
+// Light-mode train type colors
 export const TRAIN_TYPE_COLORS: Record<TrainType, string> = {
-  rajdhani:     '#818cf8',
-  express:      '#34d399',
-  passenger:    '#60a5fa',
-  freight:      '#fbbf24',
-  departmental: '#94a3b8',
+  rajdhani:     '#6D28D9',
+  express:      '#1565C0',
+  passenger:    '#0E7490',
+  freight:      '#92400E',
+  departmental: '#374151',
 }

@@ -1,627 +1,514 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { motion, AnimatePresence } from 'framer-motion'
 import { useStore } from './store/index'
 import { useWebSocket } from './hooks/useWebSocket'
 import { simulationAPI, healthAPI, kpiAPI } from './services/api'
 
-// View components
+// Zone components — always mounted
 import { NetworkMap } from './components/NetworkMap'
-import { TimeSpaceDiagram } from './components/TimeSpaceDiagram'
 import { ConflictAlert } from './components/ConflictAlert'
-import { RecommendationCards } from './components/RecommendationCards'
-import { ControllerButtons } from './components/ControllerButtons'
 import { KPIDashboard } from './components/KPIDashboard'
+import { TrainRegister } from './components/TrainRegister'
+
+// Drawer content components — lazy rendered in overlay
+import { TimeSpaceDiagram } from './components/TimeSpaceDiagram'
 import { WhatIfPanel } from './components/WhatIfPanel'
 import { AuditLog } from './components/AuditLog'
 import { PredictionPanel } from './components/PredictionPanel'
-import { ViewId } from './store/index'
 
-// ── Icons ─────────────────────────────────────────────────────────────────────
-const Icon = {
-  network: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2V9M9 21H5a2 2 0 01-2-2V9m0 0h18" />
-    </svg>
-  ),
-  timeline: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M3 12h18M3 6l9-3 9 3M3 18l9 3 9-3" />
-    </svg>
-  ),
-  conflicts: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-    </svg>
-  ),
-  recommendations: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  whatif: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  predictions: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-    </svg>
-  ),
-  audit: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  ),
-  play: () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M8 5v14l11-7z" />
-    </svg>
-  ),
-  pause: () => (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-      <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-    </svg>
-  ),
-  reset: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-4 h-4">
-      <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-    </svg>
-  ),
-  signal: () => (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="w-3 h-3">
-      <path d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0" />
-    </svg>
-  ),
+// Drawer shell
+import { DrawerOverlay, DrawerView } from './components/DrawerOverlay'
+
+// ── Minimal TrackMind logo (generic rail network icon) ────────────────────────
+function NCCLogo() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+      {/* Icon */}
+      <div style={{
+        width: 30, height: 30, borderRadius: 4,
+        background: 'rgba(255,255,255,0.12)',
+        border: '1px solid rgba(255,255,255,0.2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={1.5} style={{ width: 16, height: 16 }}>
+          {/* Stylized track schematic */}
+          <path d="M2 12h20M2 8h20M6 4v16M12 4v16M18 4v16" strokeLinecap="round" />
+        </svg>
+      </div>
+      {/* Text */}
+      <div>
+        <div style={{
+          fontFamily: 'var(--font-heading)',
+          fontWeight: 700,
+          fontSize: '1rem',
+          color: 'white',
+          lineHeight: 1.1,
+          letterSpacing: '0.04em',
+        }}>
+          TrackMind
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '0.55rem',
+          color: 'rgba(255,255,255,0.5)',
+          letterSpacing: '0.12em',
+          textTransform: 'uppercase',
+        }}>
+          Network Control Centre
+        </div>
+      </div>
+    </div>
+  )
 }
 
-// ── Nav items ──────────────────────────────────────────────────────────────────
-interface NavItem {
-  id: ViewId
-  label: string
-  icon: () => JSX.Element
-  shortcut: string
+// ── Sim control icons ─────────────────────────────────────────────────────────
+const PlayIcon  = () => <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12 }}><path d="M8 5v14l11-7z"/></svg>
+const PauseIcon = () => <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 12, height: 12 }}><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+const ResetIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 12, height: 12 }}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+
+// Drawer view config
+const DRAWER_META: Record<NonNullable<DrawerView>, { label: string; title: string; subtitle: string }> = {
+  timeline:    { label: 'Time-Space', title: 'TIME-SPACE DIAGRAM',      subtitle: 'Train trajectories & conflict crossing points' },
+  whatif:      { label: 'What-If',   title: 'SCENARIO LAB',             subtitle: 'Simulate disruptions before they occur' },
+  predictions: { label: 'Forecast',  title: 'DELAY FORECAST',           subtitle: 'ML-predicted delays & risk scores' },
+  audit:       { label: 'Audit Log', title: 'CONTROLLER AUDIT LOG',     subtitle: 'Timestamped decision record' },
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { id: 'network',         label: 'Network Map',       icon: Icon.network,         shortcut: '1' },
-  { id: 'timeline',        label: 'Time-Space',        icon: Icon.timeline,        shortcut: '2' },
-  { id: 'conflicts',       label: 'Conflicts',         icon: Icon.conflicts,       shortcut: '3' },
-  { id: 'recommendations', label: 'Decisions',         icon: Icon.recommendations, shortcut: '4' },
-  { id: 'whatif',          label: 'Scenario Lab',      icon: Icon.whatif,          shortcut: '5' },
-  { id: 'predictions',     label: 'Forecast',          icon: Icon.predictions,     shortcut: '6' },
-  { id: 'audit',           label: 'Audit Log',         icon: Icon.audit,           shortcut: '7' },
-]
-
-// ── Page transition variant ────────────────────────────────────────────────────
-const PAGE_VARIANT = {
-  initial: { opacity: 0, y: 6 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.18, ease: 'easeOut' } },
-  exit:    { opacity: 0, y: -4, transition: { duration: 0.12, ease: 'easeIn' } },
-}
-
-// ── Main App ───────────────────────────────────────────────────────────────────
+// ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const {
     trains, conflicts, liveConflicts, conflictHistory, stationState, blockOccupancy, signalStates,
     simulationRunning, sessionId, simElapsedSec,
-    kpis, activeView, auditLogs, predictions, whatIfResult, activeRecommendation,
+    kpis, auditLogs, predictions, whatIfResult, activeRecommendation,
     setActiveView, setWsConnected, setKpis, applyWSUpdate, addAuditLog,
     setPredictions, setActiveRecommendation, exitFocusMode, tickConflictLifecycles,
+    setSelectedTrain, selectedTrainId,
   } = useStore()
+
+  const [drawerView, setDrawerView]               = useState<DrawerView>(null)
+  const [registerCollapsed, setRegisterCollapsed]   = useState(false)
+  const [darkMode, setDarkMode]                     = useState(() => {
+    return localStorage.getItem('trackmind-theme') === 'dark'
+  })
+
+  // Apply theme to document root
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+    localStorage.setItem('trackmind-theme', darkMode ? 'dark' : 'light')
+  }, [darkMode])
 
   const queryClient = useQueryClient()
   const { connected, status: wsStatus, subscribe } = useWebSocket('/ws/live')
 
-  // ── Sync WS connection status ──────────────────────────────────────────────
-  useEffect(() => {
-    setWsConnected(connected)
-  }, [connected, setWsConnected])
+  useEffect(() => { setWsConnected(connected) }, [connected, setWsConnected])
 
-  // ── Handle WS messages ─────────────────────────────────────────────────────
   useEffect(() => {
-    const off = subscribe('state_update', (msg) => {
-      applyWSUpdate(msg.payload as Parameters<typeof applyWSUpdate>[0])
-    })
-    const offConflict = subscribe('conflict_alert', (msg) => {
-      applyWSUpdate(msg.payload as Parameters<typeof applyWSUpdate>[0])
-    })
-    const offRec = subscribe('recommendation_ready', (msg) => {
+    const off       = subscribe('state_update',        (msg) => applyWSUpdate(msg.payload as Parameters<typeof applyWSUpdate>[0]))
+    const offConf   = subscribe('conflict_alert',      (msg) => applyWSUpdate(msg.payload as Parameters<typeof applyWSUpdate>[0]))
+    const offRec    = subscribe('recommendation_ready',(msg) => {
       const payload = msg.payload as { recommendation?: typeof activeRecommendation }
-      if (payload?.recommendation) {
-        setActiveRecommendation(payload.recommendation)
-      }
+      if (payload?.recommendation) setActiveRecommendation(payload.recommendation)
     })
-    return () => { off(); offConflict(); offRec() }
+    return () => { off(); offConf(); offRec() }
   }, [subscribe, applyWSUpdate, setActiveRecommendation])
 
-  // ── Health poll ────────────────────────────────────────────────────────────
-  useQuery({
-    queryKey: ['health'],
-    queryFn: () => healthAPI.check().then((r) => r.data),
-    refetchInterval: 10_000,
-  })
+  useQuery({ queryKey: ['health'], queryFn: () => healthAPI.check().then(r => r.data), refetchInterval: 10_000 })
 
-  // ── KPI poll ───────────────────────────────────────────────────────────────
   const { data: kpiData } = useQuery({
     queryKey: ['kpis'],
-    queryFn: () => kpiAPI.get().then((r) => r.data as NonNullable<typeof kpis>),
+    queryFn: () => kpiAPI.get().then(r => r.data as NonNullable<typeof kpis>),
     refetchInterval: 5_000,
   })
-  useEffect(() => {
-    if (kpiData) setKpis(kpiData)
-  }, [kpiData, setKpis])
+  useEffect(() => { if (kpiData) setKpis(kpiData) }, [kpiData, setKpis])
 
-  // ── Predictions poll ───────────────────────────────────────────────────────
   const { data: predData } = useQuery({
     queryKey: ['predictions'],
-    queryFn: () => kpiAPI.predictions().then((r) => r.data),
+    queryFn: () => kpiAPI.predictions().then(r => r.data),
     refetchInterval: 3_000,
   })
   useEffect(() => {
-    if (predData && 'predictions' in predData) {
-      setPredictions(predData.predictions as typeof predictions)
-    }
+    if (predData && 'predictions' in predData) setPredictions(predData.predictions as typeof predictions)
   }, [predData, setPredictions])
 
-  // ── Simulation controls ────────────────────────────────────────────────────
-  const startMutation = useMutation({
-    mutationFn: () => simulationAPI.start('demo_5stn').then((r) => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kpis'] }),
-  })
+  const startMutation  = useMutation({ mutationFn: () => simulationAPI.start('demo_5stn').then(r => r.data), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['kpis'] }) })
+  const pauseMutation  = useMutation({ mutationFn: () => simulationAPI.pause().then(r => r.data) })
+  const resetMutation  = useMutation({ mutationFn: () => simulationAPI.reset().then(r => r.data), onSuccess: () => queryClient.invalidateQueries() })
 
-  const pauseMutation = useMutation({
-    mutationFn: () => simulationAPI.pause().then((r) => r.data),
-  })
-
-  const resumeMutation = useMutation({
-    mutationFn: () => simulationAPI.resume().then((r) => r.data),
-  })
-
-  const resetMutation = useMutation({
-    mutationFn: () => simulationAPI.reset().then((r) => r.data),
-    onSuccess: () => queryClient.invalidateQueries(),
-  })
-
-  // ── Conflict lifecycle tick (every 500ms) ─────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => tickConflictLifecycles(), 500)
     return () => clearInterval(id)
   }, [tickConflictLifecycles])
 
-  // ── ESC exits focus mode ───────────────────────────────────────────────────
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') exitFocusMode()
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      const item = NAV_ITEMS.find((n) => n.shortcut === e.key)
-      if (item) setActiveView(item.id)
+      if (e.key === 'Escape') { exitFocusMode(); setDrawerView(null) }
+      if (e.key === '2') setDrawerView(v => v === 'timeline' ? null : 'timeline')
+      if (e.key === '5') setDrawerView(v => v === 'whatif' ? null : 'whatif')
+      if (e.key === '6') setDrawerView(v => v === 'predictions' ? null : 'predictions')
+      if (e.key === '7') setDrawerView(v => v === 'audit' ? null : 'audit')
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [setActiveView, exitFocusMode])
+  }, [exitFocusMode, setActiveView])
 
-  // ── Accept recommendation ──────────────────────────────────────────────────
-  const handleAccept = useCallback(
-    async (recId: string, _optionRank?: number) => {
-      try {
-        const { recommendAPI } = await import('./services/api')
-        await recommendAPI.accept(recId)
-        addAuditLog({
-          id: `al_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          event_type: 'recommendation_accepted',
-          train_ids: activeRecommendation?.options[0]?.actions.map((a) => a.train_id) ?? [],
-          recommendation_id: recId,
-          controller_decision: 'accepted',
-          section_id: 'main',
-          controller_id: 'CTR-01',
-          system_version: '2.0.0',
-        })
-        setActiveRecommendation(null)
-      } catch (e) {
-        console.error('Accept failed', e)
-      }
-    },
-    [activeRecommendation, addAuditLog, setActiveRecommendation]
-  )
+  const handleAccept = useCallback(async (recId: string, _optionRank?: number) => {
+    try {
+      const { recommendAPI } = await import('./services/api')
+      await recommendAPI.accept(recId)
+      addAuditLog({
+        id: `al_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event_type: 'recommendation_accepted',
+        train_ids: activeRecommendation?.options[0]?.actions.map(a => a.train_id) ?? [],
+        recommendation_id: recId,
+        controller_decision: 'accepted',
+        section_id: 'main',
+        controller_id: 'CTR-01',
+        system_version: '2.0.0',
+      })
+      setActiveRecommendation(null)
+    } catch (e) { console.error('Accept failed', e) }
+  }, [activeRecommendation, addAuditLog, setActiveRecommendation])
 
-  const handleOverride = useCallback(
-    async (recId: string, reason: string) => {
-      try {
-        const { recommendAPI } = await import('./services/api')
-        await recommendAPI.override(recId, reason)
-        addAuditLog({
-          id: `al_${Date.now()}`,
-          timestamp: new Date().toISOString(),
-          event_type: 'recommendation_overridden',
-          train_ids: [],
-          recommendation_id: recId,
-          controller_decision: 'overridden',
-          controller_override_reason: reason,
-          section_id: 'main',
-          controller_id: 'CTR-01',
-          system_version: '2.0.0',
-        })
-        setActiveRecommendation(null)
-      } catch (e) {
-        console.error('Override failed', e)
-      }
-    },
-    [addAuditLog, setActiveRecommendation]
-  )
+  const handleOverride = useCallback(async (recId: string, reason: string) => {
+    try {
+      const { recommendAPI } = await import('./services/api')
+      await recommendAPI.override(recId, reason)
+      addAuditLog({
+        id: `al_${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        event_type: 'recommendation_overridden',
+        train_ids: [],
+        recommendation_id: recId,
+        controller_decision: 'overridden',
+        controller_override_reason: reason,
+        section_id: 'main',
+        controller_id: 'CTR-01',
+        system_version: '2.0.0',
+      })
+      setActiveRecommendation(null)
+    } catch (e) { console.error('Override failed', e) }
+  }, [addAuditLog, setActiveRecommendation])
 
-  // ── Derived values ─────────────────────────────────────────────────────────
-  const conflictCount = liveConflicts.filter(
-    (c) => c.lifecycle !== 'RESOLVED' && c.lifecycle !== 'ARCHIVED'
-  ).length
+  // Derived
+  const conflictCount = liveConflicts.filter(c => c.lifecycle !== 'RESOLVED' && c.lifecycle !== 'ARCHIVED').length
 
-  const formatElapsed = (sec: number) => {
-    const h = Math.floor(sec / 3600)
-    const m = Math.floor((sec % 3600) / 60)
-    const s = sec % 60
-    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+  const formatClock = (sec: number) => {
+    const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60
+    return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div
-      className="flex flex-col min-h-screen"
-      style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}
-    >
-      {/* ── Command Bar (Top) ──────────────────────────────────────────────── */}
-      <header
-        className="flex-shrink-0 border-b z-40 sticky top-0"
-        style={{
-          background: 'var(--surface-1)',
-          borderColor: 'var(--border)',
-          backdropFilter: 'blur(20px)',
-        }}
-      >
-        {/* Top row: logo + sim controls + status */}
-        <div className="flex items-center gap-4 px-4 py-2">
-          {/* Logo */}
-          <div className="flex items-center gap-2.5 flex-shrink-0">
-            <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'var(--accent)', boxShadow: '0 0 12px var(--accent)44' }}
-            >
-              <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
-                <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1zM4 22v-7" />
-              </svg>
-            </div>
-            <div>
-              <div className="font-heading font-bold text-sm leading-tight" style={{ color: 'var(--text-primary)' }}>
-                TrackMind
-              </div>
-              <div className="text-xs leading-tight" style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                Rail Control System
-              </div>
-            </div>
-          </div>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100vh',
+      overflow: 'hidden',
+      background: 'var(--bg-app)',
+    }}>
 
-          {/* Live indicator */}
-          <div className="flex items-center gap-1.5 ml-2">
-            <span
-              className={`inline-block w-1.5 h-1.5 rounded-full ${wsStatus === 'connected' ? 'animate-pulse' : ''}`}
-              style={{
-                background:
-                  wsStatus === 'connected' ? 'var(--success)'
-                  : wsStatus === 'reconnecting' ? 'var(--warning)'
-                  : 'var(--danger)',
-              }}
-            />
-            <span
-              className="text-xs"
-              style={{
-                color:
-                  wsStatus === 'connected' ? 'var(--success)'
-                  : wsStatus === 'reconnecting' ? 'var(--warning)'
-                  : 'var(--danger)',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
+      {/* ── HEADER BAR ────────────────────────────────────────────────────── */}
+      <header className="ncc-header" style={{ padding: '0 12px', gap: 0 }}>
+        {/* Logo */}
+        <NCCLogo />
+
+        {/* Divider */}
+        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', margin: '0 12px' }} />
+
+        {/* Section ID */}
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '0.78rem', color: 'rgba(255,255,255,0.9)', letterSpacing: '0.04em' }}>
+            MUM–SRT SECTION
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.06em' }}>
+            WESTERN DIVISION · CRS ZONE
+          </div>
+        </div>
+
+        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', margin: '0 12px' }} />
+
+        {/* Live + Sim clock */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span className="status-dot live" style={{ width: 7, height: 7 }} />
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '0.65rem', fontWeight: 700,
+              color: wsStatus === 'connected' ? '#4ADE80' : wsStatus === 'reconnecting' ? '#FBBF24' : '#F87171',
+            }}>
               {wsStatus === 'connected' ? 'LIVE' : wsStatus === 'reconnecting' ? 'RECONNECTING' : 'OFFLINE'}
             </span>
           </div>
-
-          {/* Elapsed time */}
-          <div
-            className="flex items-center gap-1 px-2 py-1 rounded"
-            style={{ background: 'var(--surface-2)', fontFamily: 'var(--font-mono)', fontSize: '0.7rem', color: 'var(--secondary)' }}
-          >
-            <span>{formatElapsed(simElapsedSec)}</span>
+          <div style={{
+            fontFamily: 'var(--font-mono)', fontSize: '0.75rem', fontWeight: 700,
+            color: 'rgba(255,255,255,0.85)', letterSpacing: '0.05em',
+            background: 'rgba(0,0,0,0.25)', padding: '2px 8px', borderRadius: 3,
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}>
+            {formatClock(simElapsedSec)}
           </div>
-
-          {/* Session ID */}
-          {sessionId && (
-            <div
-              className="hidden md:flex items-center gap-1 text-xs rounded px-1.5 py-0.5"
-              style={{ background: 'var(--surface-2)', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}
-            >
-              <span>SID:</span>
-              <span>{sessionId.slice(0, 8)}&hellip;</span>
-            </div>
-          )}
-
-          <div className="flex-1" />
-
-          {/* Simulation state badge */}
-          <div
-            className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded text-xs"
-            style={{
-              background: simulationRunning ? 'var(--success)18' : 'var(--surface-2)',
-              border: `1px solid ${simulationRunning ? 'var(--success)44' : 'var(--border)'}`,
-              color: simulationRunning ? 'var(--success)' : 'var(--text-muted)',
-              fontFamily: 'var(--font-mono)',
-            }}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${simulationRunning ? 'animate-pulse' : ''}`}
-              style={{ background: simulationRunning ? 'var(--success)' : 'var(--text-muted)' }}
-            />
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontFamily: 'var(--font-mono)', fontSize: '0.62rem',
+            padding: '2px 8px', borderRadius: 3,
+            background: simulationRunning ? 'rgba(74,222,128,0.12)' : 'rgba(255,255,255,0.06)',
+            border: `1px solid ${simulationRunning ? 'rgba(74,222,128,0.35)' : 'rgba(255,255,255,0.12)'}`,
+            color: simulationRunning ? '#4ADE80' : 'rgba(255,255,255,0.4)',
+          }}>
+            <span style={{
+              width: 5, height: 5, borderRadius: '50%',
+              background: simulationRunning ? '#4ADE80' : 'rgba(255,255,255,0.3)',
+              animation: simulationRunning ? 'blink-live 1.5s ease-in-out infinite' : undefined,
+            }} />
             {simulationRunning ? 'SIM RUNNING' : 'SIM PAUSED'}
           </div>
+        </div>
 
-          {/* Sim controls */}
-          <div className="flex items-center gap-1.5">
-            {!simulationRunning ? (
-              <button
-                id="btn-start-sim"
-                onClick={() => startMutation.mutate()}
-                disabled={startMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all"
-                style={{
-                  background: 'var(--accent)',
-                  color: '#fff',
-                  opacity: startMutation.isPending ? 0.6 : 1,
-                  transitionDuration: 'var(--transition-hover)',
-                }}
-              >
-                <Icon.play />
-                Start
-              </button>
-            ) : (
-              <button
-                id="btn-pause-sim"
-                onClick={() => pauseMutation.mutate()}
-                disabled={pauseMutation.isPending}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all"
-                style={{
-                  background: 'var(--warning)22',
-                  border: '1px solid var(--warning)44',
-                  color: 'var(--warning)',
-                  transitionDuration: 'var(--transition-hover)',
-                }}
-              >
-                <Icon.pause />
-                Pause
-              </button>
-            )}
+        <div style={{ flex: 1 }} />
+
+        {/* KPI Strip inline */}
+        {kpis && <KPIDashboard metrics={kpis} trains={trains} />}
+
+        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', margin: '0 12px' }} />
+
+        {/* Sim controls */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {!simulationRunning ? (
             <button
-              id="btn-reset-sim"
-              onClick={() => resetMutation.mutate()}
-              disabled={resetMutation.isPending}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded text-xs transition-all"
+              id="btn-start-sim"
+              onClick={() => startMutation.mutate()}
+              disabled={startMutation.isPending}
               style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--border)',
-                color: 'var(--text-muted)',
-                transitionDuration: 'var(--transition-hover)',
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 12px', borderRadius: 3, fontSize: '0.72rem', fontWeight: 700,
+                background: 'var(--safety-green)', color: '#fff', border: 'none',
+                cursor: 'pointer', fontFamily: 'var(--font-heading)', letterSpacing: '0.04em',
+                opacity: startMutation.isPending ? 0.6 : 1, transition: 'opacity 100ms',
               }}
             >
-              <Icon.reset />
+              <PlayIcon /> START
             </button>
-          </div>
-
-          {/* Controller profile */}
-          <div
-            className="hidden md:flex items-center gap-2 px-2.5 py-1.5 rounded"
-            style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}
-          >
-            <div
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-              style={{ background: 'var(--accent)', color: '#fff' }}
+          ) : (
+            <button
+              id="btn-pause-sim"
+              onClick={() => pauseMutation.mutate()}
+              disabled={pauseMutation.isPending}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                padding: '4px 12px', borderRadius: 3, fontSize: '0.72rem', fontWeight: 700,
+                background: 'rgba(251,191,36,0.18)', color: '#FBBF24',
+                border: '1px solid rgba(251,191,36,0.4)', cursor: 'pointer',
+                fontFamily: 'var(--font-heading)', letterSpacing: '0.04em',
+              }}
             >
-              C
-            </div>
-            <span className="text-xs font-medium" style={{ color: 'var(--text-primary)' }}>CTR-01</span>
-          </div>
-        </div>
-
-        {/* KPI Bar */}
-        <div
-          className="px-4 py-2 border-t overflow-x-auto"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          {kpis && (
-            <KPIDashboard
-              metrics={kpis}
-              trains={trains}
-            />
+              <PauseIcon /> PAUSE
+            </button>
           )}
-        </div>
-
-        {/* Nav Tabs */}
-        <nav
-          className="flex items-end px-4 border-t overflow-x-auto"
-          style={{ borderColor: 'var(--border)' }}
-        >
-          {NAV_ITEMS.map((item) => {
-            const active = activeView === item.id
-            return (
-              <button
-                key={item.id}
-                id={`nav-${item.id}`}
-                onClick={() => setActiveView(item.id)}
-                className="relative flex items-center gap-2 px-3 py-2.5 text-xs font-medium transition-all flex-shrink-0"
-                style={{
-                  color: active ? 'var(--accent)' : 'var(--text-muted)',
-                  borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
-                  transitionDuration: 'var(--transition-hover)',
-                }}
-              >
-                <item.icon />
-                <span className="hidden sm:inline">{item.label}</span>
-                {item.id === 'conflicts' && conflictCount > 0 && (
-                  <span
-                    className="ml-1 px-1.5 py-0.5 rounded-full text-white"
-                    style={{
-                      background: 'var(--danger)',
-                      fontSize: '0.6rem',
-                      lineHeight: 1,
-                    }}
-                  >
-                    {conflictCount}
-                  </span>
-                )}
-                <kbd
-                  className="hidden lg:inline-flex items-center justify-center rounded px-1"
-                  style={{
-                    fontSize: '0.55rem',
-                    background: 'var(--surface-2)',
-                    color: 'var(--text-muted)',
-                    border: '1px solid var(--border)',
-                    lineHeight: 1.4,
-                    minWidth: '1rem',
-                  }}
-                >
-                  {item.shortcut}
-                </kbd>
-              </button>
-            )
-          })}
-        </nav>
-      </header>
-
-      {/* ── Main Content ──────────────────────────────────────────────────── */}
-      <main className="flex-1 overflow-auto p-4 md:p-5">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeView}
-            variants={PAGE_VARIANT}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="h-full"
-          >
-            {/* Network Map */}
-            {activeView === 'network' && (
-              <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-                <div className="xl:col-span-2">
-                  <NetworkMap
-                    trains={trains}
-                    stationState={stationState}
-                    blockOccupancy={blockOccupancy}
-                    signalStates={signalStates}
-                    conflicts={conflicts}
-                  />
-                </div>
-                <div className="flex flex-col gap-4">
-                  <ConflictAlert
-                    liveConflicts={liveConflicts}
-                    conflictHistory={conflictHistory}
-                  />
-                  <ControllerButtons
-                    trains={trains}
-                    simulationRunning={simulationRunning}
-                    onStart={() => startMutation.mutate()}
-                    onPause={() => pauseMutation.mutate()}
-                    onResume={() => resumeMutation.mutate()}
-                    onReset={() => resetMutation.mutate()}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Time-Space Diagram */}
-            {activeView === 'timeline' && (
-              <TimeSpaceDiagram
-                trains={trains}
-                conflicts={conflicts}
-                stations={['MUM', 'KLD', 'LNL', 'PNE', 'SRT']}
-              />
-            )}
-
-            {/* Conflicts */}
-            {activeView === 'conflicts' && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                <ConflictAlert
-                  liveConflicts={liveConflicts}
-                  conflictHistory={conflictHistory}
-                  expanded
-                />
-                {activeRecommendation && (
-                  <RecommendationCards
-                    recommendation={activeRecommendation}
-                    onAccept={handleAccept}
-                    onOverride={handleOverride}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Recommendations / Decisions */}
-            {activeView === 'recommendations' && (
-              <RecommendationCards
-                recommendation={activeRecommendation}
-                onAccept={handleAccept}
-                onOverride={handleOverride}
-                fullWidth
-              />
-            )}
-
-            {/* Scenario Lab */}
-            {activeView === 'whatif' && (
-              <WhatIfPanel result={whatIfResult} />
-            )}
-
-            {/* Forecast / Predictions */}
-            {activeView === 'predictions' && (
-              <PredictionPanel predictions={predictions} trains={trains} />
-            )}
-
-            {/* Audit */}
-            {activeView === 'audit' && (
-              <AuditLog logs={auditLogs} sessionId={sessionId} />
-            )}
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* ── Mobile bottom nav ─────────────────────────────────────────────── */}
-      <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 border-t z-50 flex"
-        style={{
-          background: 'var(--surface-1)',
-          backdropFilter: 'blur(20px)',
-          borderColor: 'var(--border)',
-        }}
-      >
-        {NAV_ITEMS.slice(0, 5).map((item) => (
           <button
-            key={item.id}
-            id={`mobile-nav-${item.id}`}
-            onClick={() => setActiveView(item.id)}
-            className="flex-1 flex flex-col items-center gap-0.5 py-2 text-xs relative transition-all"
+            id="btn-reset-sim"
+            onClick={() => resetMutation.mutate()}
+            disabled={resetMutation.isPending}
+            title="Reset simulation"
             style={{
-              color: activeView === item.id ? 'var(--accent)' : 'var(--text-muted)',
-              transitionDuration: 'var(--transition-hover)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 3,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: 'rgba(255,255,255,0.5)', cursor: 'pointer',
+              transition: 'all 100ms',
             }}
           >
-            <item.icon />
-            <span style={{ fontSize: '0.6rem' }}>{item.label.split(' ')[0]}</span>
-            {item.id === 'conflicts' && conflictCount > 0 && (
-              <span
-                className="absolute top-1 right-1/4 w-3.5 h-3.5 rounded-full text-white flex items-center justify-center"
-                style={{ background: 'var(--danger)', fontSize: '0.55rem' }}
-              >
-                {conflictCount}
-              </span>
-            )}
+            <ResetIcon />
           </button>
-        ))}
-      </nav>
+        </div>
+
+        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', margin: '0 10px' }} />
+
+        {/* Dark / Light mode toggle */}
+        <button
+          id="btn-toggle-theme"
+          onClick={() => setDarkMode(d => !d)}
+          title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '4px 10px', borderRadius: 3, flexShrink: 0,
+            background: darkMode ? 'rgba(251,191,36,0.12)' : 'rgba(255,255,255,0.08)',
+            border: `1px solid ${darkMode ? 'rgba(251,191,36,0.35)' : 'rgba(255,255,255,0.15)'}`,
+            color: darkMode ? '#FBBF24' : 'rgba(255,255,255,0.7)',
+            cursor: 'pointer', transition: 'all 150ms ease',
+            fontSize: '0.7rem', fontFamily: 'var(--font-mono)', fontWeight: 600,
+            letterSpacing: '0.04em',
+          }}
+        >
+          {darkMode ? (
+            /* Sun icon */
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+              <circle cx="12" cy="12" r="5"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+          ) : (
+            /* Moon icon */
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ width: 13, height: 13 }}>
+              <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+            </svg>
+          )}
+          {darkMode ? 'LIGHT' : 'DARK'}
+        </button>
+
+        <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)', margin: '0 10px' }} />
+
+        {/* Controller ID */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 7,
+          padding: '4px 10px', borderRadius: 3,
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          flexShrink: 0,
+        }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: 12,
+            background: 'rgba(255,255,255,0.18)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '0.75rem', fontWeight: 700, color: 'white',
+          }}>C</div>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.72rem', color: 'white', fontWeight: 600 }}>CTR-01</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.05em' }}>SECTION CONTROLLER</div>
+          </div>
+        </div>
+      </header>
+
+      {/* ── SUB-HEADER: Secondary view toggles ───────────────────────────────── */}
+      <div className="ncc-subheader" style={{ padding: '0 12px', gap: 2 }}>
+        {/* Active view indicator */}
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.58rem', color: 'rgba(255,255,255,0.35)', marginRight: 8, letterSpacing: '0.06em' }}>
+          VIEWS:
+        </span>
+
+        {/* Network map (always active) */}
+        <div style={{
+          padding: '2px 12px', fontSize: '0.68rem', fontWeight: 700,
+          fontFamily: 'var(--font-heading)', letterSpacing: '0.04em',
+          color: 'white',
+          borderBottom: '2px solid rgba(255,255,255,0.7)',
+          cursor: 'default',
+        }}>
+          Network Map
+        </div>
+
+        {/* Drawer toggles */}
+        {(Object.entries(DRAWER_META) as [NonNullable<DrawerView>, typeof DRAWER_META[NonNullable<DrawerView>]][]).map(([view, meta]) => {
+          const isActive = drawerView === view
+          return (
+            <button
+              key={view}
+              id={`nav-drawer-${view}`}
+              onClick={() => setDrawerView(isActive ? null : view)}
+              style={{
+                padding: '2px 12px', fontSize: '0.68rem', fontWeight: 600,
+                fontFamily: 'var(--font-heading)', letterSpacing: '0.04em',
+                background: 'transparent', border: 'none',
+                color: isActive ? 'white' : 'rgba(255,255,255,0.45)',
+                borderBottom: isActive ? '2px solid rgba(255,255,255,0.7)' : '2px solid transparent',
+                cursor: 'pointer', transition: 'all 120ms ease',
+              }}
+            >
+              {meta.label}
+            </button>
+          )
+        })}
+
+        <div style={{ flex: 1 }} />
+
+        {/* Conflict count quick status */}
+        {conflictCount > 0 && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '1px 10px', borderRadius: 2,
+            background: 'rgba(204,34,0,0.2)',
+            border: '1px solid rgba(204,34,0,0.5)',
+            fontFamily: 'var(--font-mono)', fontSize: '0.62rem', fontWeight: 700,
+            color: '#FCA5A5',
+            animation: 'blink-live 2s ease-in-out infinite',
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#FCA5A5', animation: 'blink-live 1s ease-in-out infinite' }} />
+            {conflictCount} CONFLICT{conflictCount > 1 ? 'S' : ''} ACTIVE
+          </div>
+        )}
+
+        {/* Session ID */}
+        {sessionId && (
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.55rem', color: 'rgba(255,255,255,0.25)', marginLeft: 8 }}>
+            SID:{sessionId.slice(0, 8)}
+          </span>
+        )}
+      </div>
+
+      {/* ── MAIN CONTENT AREA (flex col, fills remaining height) ─────────────── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', position: 'relative' }}>
+
+        {/* 70/30 grid */}
+        <div className="ncc-main-grid" style={{ flex: 1, minHeight: 0 }}>
+
+          {/* ── Network Map (70%) ──────────────────────────────────────────── */}
+          <div className="ncc-map-area" style={{ position: 'relative', overflow: 'hidden' }}>
+            <NetworkMap
+              trains={trains}
+              stationState={stationState}
+              blockOccupancy={blockOccupancy}
+              signalStates={signalStates}
+              conflicts={conflicts}
+            />
+          </div>
+
+          {/* ── Action Queue (30%) ─────────────────────────────────────────── */}
+          <div className="ncc-action-queue" style={{ position: 'relative', overflow: 'hidden' }}>
+            <ConflictAlert
+              liveConflicts={liveConflicts}
+              conflictHistory={conflictHistory}
+              recommendation={activeRecommendation}
+              onAccept={handleAccept}
+              onOverride={handleOverride}
+              predictions={predictions}
+            />
+
+            {/* Slide-over drawer — overlays action queue */}
+            {drawerView && (
+              <DrawerOverlay
+                view={drawerView}
+                onClose={() => setDrawerView(null)}
+                title={DRAWER_META[drawerView].title}
+                subtitle={DRAWER_META[drawerView].subtitle}
+              >
+                {drawerView === 'timeline' && (
+                  <TimeSpaceDiagram
+                    trains={trains}
+                    conflicts={conflicts}
+                    stations={['MUM', 'KLD', 'LNL', 'PNE', 'SRT']}
+                  />
+                )}
+                {drawerView === 'whatif' && <WhatIfPanel result={whatIfResult} />}
+                {drawerView === 'predictions' && <PredictionPanel predictions={predictions} trains={trains} />}
+                {drawerView === 'audit' && <AuditLog logs={auditLogs} sessionId={sessionId} />}
+              </DrawerOverlay>
+            )}
+          </div>
+        </div>
+
+        {/* ── Train Register (bottom, collapsible) ──────────────────────────── */}
+        <TrainRegister
+          trains={trains}
+          onSelectTrain={(id) => setSelectedTrain(id)}
+          selectedTrainId={selectedTrainId}
+          collapsed={registerCollapsed}
+          onToggleCollapse={() => setRegisterCollapsed(v => !v)}
+        />
+      </div>
+
+      {/* Recommendation cards modal (when activeRecommendation exists but no conflict selected) */}
+      {/* Handled inline inside ConflictAlert now */}
     </div>
   )
 }
