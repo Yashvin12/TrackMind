@@ -32,15 +32,17 @@ class ConnectionManager:
 
     async def broadcast(self, message: dict) -> None:
         """Send message to all connected clients."""
-        dead: list = []
         data = json.dumps(message, default=str)
-        for cid, ws in list(self._active.items()):
+
+        async def _send(cid: str, ws: WebSocket):
             try:
                 await ws.send_text(data)
             except Exception:
-                dead.append(cid)
-        for cid in dead:
-            self.disconnect(cid)
+                self.disconnect(cid)
+
+        tasks = [_send(cid, ws) for cid, ws in list(self._active.items())]
+        if tasks:
+            await asyncio.gather(*tasks)
 
     async def send_to(self, client_id: str, message: dict) -> None:
         ws = self._active.get(client_id)
