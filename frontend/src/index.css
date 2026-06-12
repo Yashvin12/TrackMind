@@ -780,9 +780,14 @@
   .progress-bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
   .progress-bar-fill { height: 100%; border-radius: 2px; transition: width 300ms ease; }
 
-  /* ── Canvas Grid Background (DESIGN.md: 12×12 Slate 200) ────────────────── */
+  /* ── Canvas Grid Background (DESIGN.md: 12×12 Slate 200) ──────────────── */
   .grid-bg {
     background-size: 12px 12px;
+    background-image:
+      linear-gradient(to right, #e2e8f0 1px, transparent 1px),
+      linear-gradient(to bottom, #e2e8f0 1px, transparent 1px);
+  }
+  [data-theme="dark"] .grid-bg {
     background-image:
       linear-gradient(to right, var(--border) 1px, transparent 1px),
       linear-gradient(to bottom, var(--border) 1px, transparent 1px);

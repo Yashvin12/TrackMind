@@ -48,7 +48,10 @@ export default {
         // Existing — preserved
         heading: ['IBM Plex Sans', 'sans-serif'],
         body:    ['IBM Plex Sans', 'sans-serif'],
+        // DESIGN.md: JetBrains Mono as primary monospace
         mono:    ['JetBrains Mono', 'IBM Plex Mono', 'monospace'],
+        // DESIGN.md: IBM Plex Sans as primary sans
+        sans:    ['IBM Plex Sans', 'sans-serif'],
         // DESIGN.md named families
         'display-lg':   ['IBM Plex Sans', 'sans-serif'],
         'panel-header': ['IBM Plex Sans', 'sans-serif'],
@@ -75,14 +78,14 @@ export default {
         'data-mono-sm':  ['11px', { lineHeight: '14px', fontWeight: '400' }],
       },
       borderRadius: {
-        // DESIGN.md: 2px universal radius, "machined" look
+        // DESIGN.md: strict 2px universal radius — sharp "machined" corners
         'base':    '2px',
         DEFAULT:   '2px',
         sm:        '2px',
-        md:        '4px',
-        lg:        '4px',
-        xl:        '6px',
-        '2xl':     '8px',
+        md:        '2px',
+        lg:        '2px',
+        xl:        '2px',
+        '2xl':     '2px',
         full:      '9999px',
       },
       spacing: {

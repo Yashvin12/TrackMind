@@ -48,8 +48,8 @@ function ShapChart({ shapValues }: { shapValues: Record<string, number> }) {
   return (
     <div className="flex flex-col gap-1 p-3">
       <div
-        className="flex items-center justify-between mb-2 text-xs font-semibold"
-        style={{ color: 'var(--text-muted)' }}
+        className="flex items-center justify-between mb-2"
+        style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-muted)' }}
       >
         <span>SHAP Feature Importance</span>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.65rem' }}>
@@ -79,7 +79,7 @@ function ShapChart({ shapValues }: { shapValues: Record<string, number> }) {
                   left: isPos ? '50%' : `${50 - pct * 50}%`,
                   width: `${pct * 50}%`,
                   height: '8px',
-                  borderRadius: 4,
+                  borderRadius: 2,
                   background: isPos ? 'var(--danger)' : 'var(--success)',
                   opacity: 0.85,
                 }}
@@ -110,7 +110,7 @@ function ShapChart({ shapValues }: { shapValues: Record<string, number> }) {
           </div>
         )
       })}
-      <div className="flex justify-between mt-1 text-xs" style={{ color: 'var(--text-muted)', fontSize: '0.6rem' }}>
+      <div className="flex justify-between mt-1" style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', fontSize: 10 }}>
         <span style={{ color: 'var(--success)' }}>← Reduces delay</span>
         <span style={{ color: 'var(--danger)' }}>Increases delay →</span>
       </div>
@@ -176,7 +176,7 @@ function TrainPredRow({
   return (
     <motion.button
       onClick={onClick}
-      className="w-full text-left px-3 py-2.5 rounded-lg transition-all flex items-center gap-3"
+      className="w-full text-left px-3 py-2 rounded transition-all flex items-center gap-3"
       style={{
         background: active ? 'var(--accent)12' : 'transparent',
         border: `1px solid ${active ? 'var(--accent)44' : 'transparent'}`,
@@ -184,8 +184,8 @@ function TrainPredRow({
       }}
       whileHover={{ backgroundColor: 'var(--surface-2)' }}
     >
-      {/* Type indicator */}
-      <span className="w-2 h-8 rounded-full flex-shrink-0" style={{ background: color }} />
+      {/* Type indicator — DESIGN.md: 2px radius */}
+      <span className="w-2 h-8 rounded flex-shrink-0" style={{ background: color }} />
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
@@ -203,10 +203,10 @@ function TrainPredRow({
           </span>
         </div>
         <div className="flex items-center gap-2 mt-0.5">
-          {/* Delay bar */}
-          <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: 'var(--surface-2)' }}>
+          {/* Delay bar — sharp 2px corners per DESIGN.md */}
+          <div className="flex-1 h-1 rounded overflow-hidden" style={{ background: 'var(--surface-2)' }}>
             <div
-              className="h-full rounded-full"
+              className="h-full rounded"
               style={{
                 width: `${Math.min(pred.future_delay_min / 30, 1) * 100}%`,
                 background: pred.future_delay_min > 15 ? 'var(--danger)' : pred.future_delay_min > 5 ? 'var(--warning)' : 'var(--success)',
@@ -348,7 +348,7 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
           overflow: 'hidden',
         }}>
           {/* List header */}
-          <div className="section-header" style={{ justifyContent: 'space-between', padding: '0 10px', height: 28 }}>
+          <div className="section-header" style={{ justifyContent: 'space-between', padding: '0 10px', height: 'var(--row-h)' }}>
             <span>TRAIN FORECAST</span>
             <span style={{
               fontFamily: 'var(--font-mono)',

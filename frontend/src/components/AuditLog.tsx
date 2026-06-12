@@ -53,7 +53,7 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
       transition={{ delay: Math.min(index * 0.03, 0.3) }}
       style={{ borderBottom: '1px solid var(--border)' }}
     >
-      {/* Row button */}
+      {/* Row button — op-table density: 28px row height */}
       <button
         style={{
           width: '100%',
@@ -72,7 +72,7 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
         onMouseOut={e => (e.currentTarget.style.background = 'transparent')}
         onClick={() => setExpanded(!expanded)}
       >
-        {/* Event type badge */}
+        {/* Event type badge — DESIGN.md badge style: 2px radius, 1px border */}
         <span style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -85,7 +85,7 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
           fontFamily: 'var(--font-mono)',
           fontSize: 10,
           fontWeight: 700,
-          letterSpacing: '0.04em',
+          letterSpacing: '0.07em',
           textTransform: 'uppercase',
           flexShrink: 0,
           whiteSpace: 'nowrap',
@@ -94,10 +94,10 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
           {log.event_type.replace(/_/g, ' ')}
         </span>
 
-        {/* Train / Conflict ID */}
+        {/* Train / Conflict ID — mono for vertical scanning */}
         <span style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: 12,
+          fontSize: 13,
           color: 'var(--text-secondary)',
           flex: 1,
           overflow: 'hidden',
@@ -112,16 +112,17 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
           <span style={{
             fontFamily: 'var(--font-mono)',
             fontSize: 11,
-            fontWeight: 600,
+            fontWeight: 700,
             color: log.controller_decision === 'accepted' ? 'var(--safety-green)' : 'var(--safety-amber)',
             flexShrink: 0,
             textTransform: 'uppercase',
+            letterSpacing: '0.07em',
           }}>
             {log.controller_decision}
           </span>
         )}
 
-        {/* Relative time */}
+        {/* Relative time — right-aligned mono */}
         <span style={{
           fontFamily: 'var(--font-mono)',
           fontSize: 11,
@@ -139,7 +140,7 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
         </span>
       </button>
 
-      {/* Expanded detail row */}
+      {/* Expanded detail — op-table / spreadsheet density layout */}
       <AnimatePresence>
         {expanded && (
           <motion.div
@@ -148,46 +149,79 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
             exit={{ height: 0, opacity: 0 }}
             style={{ overflow: 'hidden' }}
           >
-            <div style={{
-              padding: '8px 12px 10px 32px',
+            <div className="inspector-section" style={{
+              padding: '8px 10px 10px 10px',
               background: 'var(--bg-row-alt)',
               borderTop: '1px solid var(--border)',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '8px 16px',
             }}>
-              {[
-                { label: 'Log ID',       value: log.id?.slice(0, 12) + '…' },
-                { label: 'Session',      value: log.section_id || '—' },
-                { label: 'Conflict ID',  value: log.conflict_id ? log.conflict_id.slice(0, 12) + '…' : '—' },
-                { label: 'Rec ID',       value: log.recommendation_id ? log.recommendation_id.slice(0, 12) + '…' : '—' },
-                { label: 'Pred Delay',   value: log.predicted_delay_min != null ? `${log.predicted_delay_min.toFixed(1)} min` : '—' },
-                { label: 'Actual Delay', value: log.actual_delay_min != null ? `${log.actual_delay_min.toFixed(1)} min` : '—' },
-                { label: 'Outcome Δ',   value: log.outcome_deviation != null ? `${log.outcome_deviation.toFixed(1)}` : '—' },
-                { label: 'System ver.',  value: log.system_version || '1.0.0' },
-              ].map(({ label, value }) => (
-                <div key={label}>
-                  <div className="inspector-label" style={{ fontSize: 10 }}>{label}</div>
+              {/* Spreadsheet-like detail grid — 4 columns */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, 1fr)',
+                gap: '4px 12px',
+                borderBottom: '1px solid var(--border)',
+                paddingBottom: 8,
+                marginBottom: 8,
+              }}>
+                {[
+                  { label: 'LOG ID',       value: log.id?.slice(0, 12) + '…' },
+                  { label: 'SESSION',      value: log.section_id || '—' },
+                  { label: 'CONFLICT ID',  value: log.conflict_id ? log.conflict_id.slice(0, 12) + '…' : '—' },
+                  { label: 'REC ID',       value: log.recommendation_id ? log.recommendation_id.slice(0, 12) + '…' : '—' },
+                  { label: 'PRED DELAY',   value: log.predicted_delay_min != null ? `${log.predicted_delay_min.toFixed(1)} min` : '—' },
+                  { label: 'ACTUAL DELAY', value: log.actual_delay_min != null ? `${log.actual_delay_min.toFixed(1)} min` : '—' },
+                  { label: 'OUTCOME Δ',   value: log.outcome_deviation != null ? `${log.outcome_deviation.toFixed(1)}` : '—' },
+                  { label: 'SYSTEM VER.',  value: log.system_version || '1.0.0' },
+                ].map(({ label, value }) => (
+                  <div key={label} style={{ minWidth: 0 }}>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                      color: 'var(--text-muted)',
+                      marginBottom: 1,
+                    }}>{label}</div>
+                    <div style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12,
+                      color: 'var(--text-primary)',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}>{value}</div>
+                  </div>
+                ))}
+              </div>
+              {log.recommended_action && (
+                <div style={{ marginBottom: 6 }}>
                   <div style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 12,
-                    color: 'var(--text-primary)',
-                    marginTop: 1,
-                  }}>{value}</div>
-                </div>
-              ))}
-              {log.recommended_action && (
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div className="inspector-label" style={{ fontSize: 10, marginBottom: 3 }}>Recommended action</div>
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    color: 'var(--text-muted)',
+                    marginBottom: 2,
+                  }}>RECOMMENDED ACTION</div>
+                  <p style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0, fontFamily: 'var(--font-body)' }}>
                     {log.recommended_action}
                   </p>
                 </div>
               )}
               {log.controller_override_reason && (
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div className="inspector-label" style={{ fontSize: 10, marginBottom: 3 }}>Override reason</div>
-                  <p style={{ fontSize: 12, color: 'var(--safety-amber)', lineHeight: 1.5, margin: 0 }}>
+                <div>
+                  <div style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.07em',
+                    color: 'var(--text-muted)',
+                    marginBottom: 2,
+                  }}>OVERRIDE REASON</div>
+                  <p style={{ fontSize: 12, color: 'var(--safety-amber)', lineHeight: 1.5, margin: 0, fontFamily: 'var(--font-body)' }}>
                     {log.controller_override_reason}
                   </p>
                 </div>
@@ -228,7 +262,7 @@ export function AuditLog({ logs: propLogs, sessionId }: Props) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg-panel)' }}>
 
-      {/* Panel header — matches section-header style */}
+      {/* Panel header — section-header class per DESIGN.md */}
       <div className="section-header" style={{ justifyContent: 'space-between', padding: '0 12px', height: 36 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 13, height: 13, opacity: 0.7 }}>
@@ -240,7 +274,7 @@ export function AuditLog({ logs: propLogs, sessionId }: Props) {
           </span>
         </div>
 
-        {/* Controls */}
+        {/* Filter controls — DESIGN.md input styling: 28px height, 2px radius, 1px border */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select
             value={filter}
@@ -255,6 +289,7 @@ export function AuditLog({ logs: propLogs, sessionId }: Props) {
               fontFamily: 'var(--font-mono)',
               cursor: 'pointer',
               appearance: 'none',
+              height: 24,
             }}
           >
             {eventTypes.map(t => (
@@ -269,23 +304,24 @@ export function AuditLog({ logs: propLogs, sessionId }: Props) {
             style={{
               background: 'rgba(255,255,255,0.1)',
               border: '1px solid rgba(255,255,255,0.2)',
-              color: 'white',
+              color: 'var(--text-on-blue)',
               fontSize: 11,
               padding: '2px 8px',
               borderRadius: 2,
               fontFamily: 'var(--font-mono)',
               width: 170,
+              height: 24,
               outline: 'none',
             }}
           />
         </div>
       </div>
 
-      {/* Table column headers — op-table style */}
+      {/* Table column headers — op-table visual language: label-caps typography */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        height: 28,
+        height: 'var(--row-h)',
         padding: '0 10px',
         gap: 8,
         background: 'var(--bg-row-alt)',
