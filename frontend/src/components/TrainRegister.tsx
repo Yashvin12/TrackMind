@@ -6,7 +6,7 @@
  * Color-coded rows: on-time (white), delayed (amber), critical (red).
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { Train } from '../types/train'
 
 interface Props {
@@ -38,7 +38,7 @@ const TYPE_COLOR: Record<string, string> = {
 type SortKey = 'id' | 'delay' | 'priority' | 'speed'
 type FilterType = 'all' | 'rajdhani' | 'express' | 'passenger' | 'freight' | 'departmental'
 
-export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapsed = false, onToggleCollapse }: Props) {
+export const TrainRegister = memo(function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapsed = false, onToggleCollapse }: Props) {
   const [search, setSearch]         = useState('')
   const [sortKey, setSortKey]       = useState<SortKey>('priority')
   const [sortAsc, setSortAsc]       = useState(true)
@@ -274,4 +274,4 @@ export function TrainRegister({ trains, onSelectTrain, selectedTrainId, collapse
       )}
     </div>
   )
-}
+})

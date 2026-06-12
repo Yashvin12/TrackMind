@@ -9,7 +9,7 @@
  *  Right — Detailed: delay comparison, metrics grid, SHAP chart
  */
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Train, TRAIN_TYPE_COLORS } from '../types/train'
 import { PredictionEntry } from '../store/index'
@@ -232,7 +232,7 @@ function TrainPredRow({
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────────
-export function PredictionPanel({ predictions: propPredictions, trains }: Props) {
+export const PredictionPanel = memo(function PredictionPanel({ predictions: propPredictions, trains }: Props) {
   const [activePredId, setActivePredId] = useState<string | null>(null)
   const storePredictions = useStore((s) => s.predictions)
 
@@ -570,4 +570,4 @@ export function PredictionPanel({ predictions: propPredictions, trains }: Props)
       </div>
     </div>
   )
-}
+})

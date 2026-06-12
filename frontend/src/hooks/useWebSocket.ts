@@ -5,17 +5,9 @@ export function useWebSocket(path = '/ws/live') {
   const wsRef = useRef<TrackMindWebSocket | null>(null)
   const [connected, setConnected] = useState(false)
   const [status, setStatus] = useState<WSStatus>('disconnected')
-  const [lastMessage, setLastMessage] = useState<WSMessage | null>(null)
-
   useEffect(() => {
     const ws = new TrackMindWebSocket(path)
     wsRef.current = ws
-
-    // React to every incoming message
-    const offMsg = ws.on('*', (msg) => {
-      setLastMessage(msg)
-      setConnected(ws.connected)
-    })
 
     // React to status changes (connected / reconnecting / disconnected)
     const offStatus = ws.onStatus((newStatus) => {
@@ -26,7 +18,6 @@ export function useWebSocket(path = '/ws/live') {
     ws.connect()
 
     return () => {
-      offMsg()
       offStatus()
       ws.disconnect()
     }
@@ -43,5 +34,5 @@ export function useWebSocket(path = '/ws/live') {
     wsRef.current?.send(msg)
   }, [])
 
-  return { connected, status, lastMessage, subscribe, send }
+  return { connected, status, subscribe, send }
 }

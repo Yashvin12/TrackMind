@@ -164,17 +164,23 @@ function mergeConflicts(
           ? prev.lifecycle
           : prev.lifecycle
       const sameEnough =
-        prev.severity === raw.severity &&
-        prev.time_to_conflict_min === raw.time_to_conflict_min &&
         prev.conflict_type === raw.conflict_type &&
         prev.block_section === raw.block_section &&
         prev.lifecycle === lifecycle
 
-      merged.push(
-        sameEnough
-          ? prev  // reuse exact reference → React bails out of re-render
-          : { ...raw, lifecycle, detectedAt: prev.detectedAt, resolvedAt: prev.resolvedAt }
-      )
+      if (sameEnough) {
+        // Patch mutable fields directly to preserve object identity,
+        // which prevents full DOM sub-tree re-renders for conflict cards
+        // while allowing targeted primitive props to update timers.
+        prev.severity = raw.severity
+        prev.time_to_conflict_min = raw.time_to_conflict_min
+        if (raw.predicted_delay_min !== undefined) {
+          prev.predicted_delay_min = raw.predicted_delay_min
+        }
+        merged.push(prev)
+      } else {
+        merged.push({ ...raw, lifecycle, detectedAt: prev.detectedAt, resolvedAt: prev.resolvedAt })
+      }
     }
   }
 
@@ -268,22 +274,25 @@ export const useStore = create<AppState>((set, get) => ({
     set((s) => ({ conflictHistory: [event, ...s.conflictHistory].slice(0, 50) })),
 
   // ── Conflict lifecycle tick ───────────────────────────────────────────────────
-  tickConflictLifecycles: () =>
-    set((s) => {
-      const now = Date.now()
-      const updated = s.liveConflicts
-        .map((lc): LiveConflict => {
-          if (lc.lifecycle === 'DETECTED' && now - lc.detectedAt > 1000) {
-            return { ...lc, lifecycle: 'ACTIVE' }
-          }
-          if (lc.lifecycle === 'RESOLVED' && lc.resolvedAt && now - lc.resolvedAt > 10000) {
-            return { ...lc, lifecycle: 'ARCHIVED' }
-          }
-          return lc
-        })
-        .filter((lc) => lc.lifecycle !== 'ARCHIVED')
-      return { liveConflicts: updated }
-    }),
+  tickConflictLifecycles: () => {
+    const s = get()
+    const now = Date.now()
+    let changed = false
+    const updated = s.liveConflicts
+      .map((lc): LiveConflict => {
+        if (lc.lifecycle === 'DETECTED' && now - lc.detectedAt > 1000) {
+          changed = true
+          return { ...lc, lifecycle: 'ACTIVE' }
+        }
+        if (lc.lifecycle === 'RESOLVED' && lc.resolvedAt && now - lc.resolvedAt > 10000) {
+          changed = true
+          return { ...lc, lifecycle: 'ARCHIVED' }
+        }
+        return lc
+      })
+    if (!changed) return
+    set({ liveConflicts: updated.filter((lc) => lc.lifecycle !== 'ARCHIVED') })
+  },
 
   // ── Throttled WS Update (2Hz) ─────────────────────────────────────────────────
   applyWSUpdate: (payload) => {

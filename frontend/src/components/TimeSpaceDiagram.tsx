@@ -17,7 +17,7 @@
  *  - Conflict sizes: minor 8px · major 12px · critical 18px
  */
 
-import { useMemo, useState, useCallback, useRef } from 'react'
+import { useMemo, useState, useCallback, useRef, memo } from 'react'
 import { Train, TRAIN_TYPE_COLORS } from '../types/train'
 import { Conflict } from '../types/conflict'
 
@@ -94,7 +94,7 @@ function findFreeY(
   return Math.max(boundsTop, y - h - 2)
 }
 
-export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
+export const TimeSpaceDiagram = memo(function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
   const trainList = useMemo(() => Object.values(trains), [trains])
 
   const [hoveredTrainId, setHoveredTrainId] = useState<string | null>(null)
@@ -842,4 +842,4 @@ export function TimeSpaceDiagram({ trains, conflicts, stations }: Props) {
       </div>
     </div>
   )
-}
+})

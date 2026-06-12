@@ -7,7 +7,7 @@
  * route lock overlays, and a future-time timeline scrubber.
  */
 
-import { useMemo, useRef, useState, useCallback } from 'react'
+import { useMemo, useRef, useState, useCallback, memo } from 'react'
 import { Train, TrainType } from '../types/train'
 import { Conflict } from '../types/conflict'
 import { StationState } from '../store/index'
@@ -185,12 +185,15 @@ function SignalPost({ x, y, state }: { x: number; y: number; state: string }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function NetworkMap({ trains, stationState, blockOccupancy, signalStates, conflicts }: Props) {
+export const NetworkMap = memo(function NetworkMap({ trains, stationState, blockOccupancy, signalStates, conflicts }: Props) {
+  console.count("NetworkMap render")
   const [spacing, setSpacing]           = useState(DEFAULT_SPACING)
   const [heatmap, setHeatmap]           = useState(false)
   const [previewOffset, setPreviewOffset] = useState(0)  // minutes into future
   const svgRef = useRef<SVGSVGElement>(null)
-  const { selectedConflictId, focusModeActive, liveConflicts } = useStore()
+  const selectedConflictId = useStore(s => s.selectedConflictId)
+  const focusModeActive = useStore(s => s.focusModeActive)
+  const liveConflicts = useStore(s => s.liveConflicts)
 
   const trainList = useMemo(() => Object.values(trains), [trains])
 
@@ -626,4 +629,4 @@ export function NetworkMap({ trains, stationState, blockOccupancy, signalStates,
       `}</style>
     </div>
   )
-}
+})
