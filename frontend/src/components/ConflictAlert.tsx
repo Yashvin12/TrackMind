@@ -135,6 +135,7 @@ function historyIcon(type: HistoryEvent['type']): { icon: string; color: string 
 // ── Single Recommendation Card ────────────────────────────────────────────────
 const RecommendationCard = memo(function RecommendationCard({
   conflict, isSelected, onSelect, recommendation, onAccept, onOverride,
+  tMinus, severity
 }: {
   conflict: LiveConflict
   isSelected: boolean
@@ -142,17 +143,20 @@ const RecommendationCard = memo(function RecommendationCard({
   recommendation?: Recommendation | null
   onAccept?: (recId: string, rank?: number) => void
   onOverride?: (recId: string, reason: string) => void
+  tMinus: number
+  severity: number
 }) {
+  console.count("RecommendationCard render")
   const [showOverride, setShowOverride] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
   const [acted, setActed] = useState<'ACCEPTED' | 'OVERRIDDEN' | null>(null)
 
-  const tier      = severityTier(conflict.severity)
+  const tier      = severityTier(severity)
   const cfg       = TIER_CONFIG[tier]
   const lcBadge   = lifecycleBadge(conflict.lifecycle)
   const trainIds  = conflict.affected_trains ?? conflict.trains_involved ?? []
   const isResolved = conflict.lifecycle === 'RESOLVED' || conflict.lifecycle === 'ARCHIVED'
-  const isUrgent   = conflict.time_to_conflict_min <= 5 && !isResolved
+  const isUrgent   = tMinus <= 5 && !isResolved
   const title      = aiRecommendationTitle(conflict)
   const shap       = shapExplanation(conflict)
   const { pct, absMin } = cascadeDelaySaving(conflict)
@@ -160,7 +164,6 @@ const RecommendationCard = memo(function RecommendationCard({
 
   return (
     <motion.div
-      layout="position"
       initial={{ opacity: 0, x: -6 }}
       animate={{ opacity: isResolved ? 0.55 : 1, x: 0 }}
       exit={{ opacity: 0, height: 0 }}
@@ -236,7 +239,7 @@ const RecommendationCard = memo(function RecommendationCard({
                 marginLeft: 'auto',
                 flexShrink: 0,
               }}>
-                T−{conflict.time_to_conflict_min.toFixed(1)} min
+                T−{tMinus.toFixed(1)} min
               </span>
             )}
           </div>
@@ -369,8 +372,8 @@ const RecommendationCard = memo(function RecommendationCard({
                         ★ TOP
                       </span>
                     )}
-                    {opt.actions.slice(0, 2).map((a, i) => (
-                      <span key={i} style={{ marginRight: 8 }}>
+                    {opt.actions.slice(0, 2).map((a) => (
+                      <span key={`${a.action_type}-${a.train_id}`} style={{ marginRight: 8 }}>
                         <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: '#0F172A' }}>
                           {a.action_type.toUpperCase()} {a.train_id}
                         </span>
@@ -517,20 +520,25 @@ const RecommendationCard = memo(function RecommendationCard({
 })
 
 // ── Main component ────────────────────────────────────────────────────────────
-export function ConflictAlert({ liveConflicts, conflictHistory, recommendation, onAccept, onOverride }: Props) {
-  const { selectedConflictId, setSelectedConflict, exitFocusMode } = useStore()
+export const ConflictAlert = memo(function ConflictAlert({ liveConflicts, conflictHistory, recommendation, onAccept, onOverride }: Props) {
+  console.count("ConflictAlert render")
+  const selectedConflictId = useStore(s => s.selectedConflictId)
+  const setSelectedConflict = useStore(s => s.setSelectedConflict)
+  const exitFocusMode = useStore(s => s.exitFocusMode)
 
   const activeCount = liveConflicts.filter(
     lc => lc.lifecycle !== 'RESOLVED' && lc.lifecycle !== 'ARCHIVED'
   ).length
 
-  // Sort: critical first, then by severity desc
-  const sorted = [...liveConflicts].sort((a, b) => {
-    const ta = severityTier(a.severity) === 'critical' ? 0 : severityTier(a.severity) === 'major' ? 1 : 2
-    const tb = severityTier(b.severity) === 'critical' ? 0 : severityTier(b.severity) === 'major' ? 1 : 2
-    if (ta !== tb) return ta - tb
-    return b.severity - a.severity
-  })
+  // Sort: critical first, then by stable detectedAt time to prevent layout thrashing
+  const sorted = [...liveConflicts]
+    .filter(c => c.lifecycle !== 'RESOLVED' && c.lifecycle !== 'ARCHIVED')
+    .sort((a, b) => {
+      const ta = severityTier(a.severity) === 'critical' ? 0 : severityTier(a.severity) === 'major' ? 1 : 2
+      const tb = severityTier(b.severity) === 'critical' ? 0 : severityTier(b.severity) === 'major' ? 1 : 2
+      if (ta !== tb) return ta - tb
+      return a.detectedAt - b.detectedAt
+    })
 
   const handleSelect = useCallback((id: string) => {
     if (!id || id === selectedConflictId) exitFocusMode()
@@ -672,6 +680,8 @@ export function ConflictAlert({ liveConflicts, conflictHistory, recommendation, 
                 recommendation={recommendation}
                 onAccept={onAccept}
                 onOverride={onOverride}
+                tMinus={conflict.time_to_conflict_min}
+                severity={conflict.severity}
               />
             ))}
           </AnimatePresence>
@@ -742,4 +752,4 @@ export function ConflictAlert({ liveConflicts, conflictHistory, recommendation, 
       )}
     </div>
   )
-}
+})

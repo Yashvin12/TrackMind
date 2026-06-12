@@ -12,7 +12,7 @@
  *  - No dark: classes, no shadows
  */
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMutation } from '@tanstack/react-query'
 import { whatifAPI } from '../services/api'
@@ -248,7 +248,7 @@ function IndustrialSpinner() {
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
-export function WhatIfPanel({ result }: Props) {
+export const WhatIfPanel = memo(function WhatIfPanel({ result }: Props) {
   const [selectedType, setSelectedType] = useState(DISRUPTION_TYPES[0].id)
   const [params, setParams] = useState<Record<string, string | number>>({})
   const setWhatIfResult = useStore((s) => s.setWhatIfResult)
@@ -663,4 +663,4 @@ export function WhatIfPanel({ result }: Props) {
       </div>
     </div>
   )
-}
+})

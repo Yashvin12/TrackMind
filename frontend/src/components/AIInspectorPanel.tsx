@@ -7,7 +7,7 @@
  * - Nothing selected  → system health summary
  */
 
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Train } from '../types/train'
 import { LiveConflict, PredictionEntry } from '../store/index'
 import { Recommendation } from '../types/recommendation'
@@ -235,8 +235,8 @@ function ConflictInspector({
             </span>
             <span style={{ color: 'var(--safety-green)' }}>{confidence}% conf.</span>
           </div>
-          {topOption.actions.slice(0, 3).map((a, i) => (
-            <div key={i} style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3, lineHeight: 1.4 }}>
+          {topOption.actions.slice(0, 3).map((a) => (
+            <div key={`${a.action_type}-${a.train_id}`} style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 3, lineHeight: 1.4 }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, color: 'var(--ir-blue)', marginRight: 5 }}>
                 {a.action_type.toUpperCase()} {a.train_id}
               </span>
@@ -369,7 +369,7 @@ function IdleInspector({ conflictCount, trainCount, avgDelay }: {
 }
 
 /* ── Main Export ──────────────────────────────────────────────────────────── */
-export function AIInspectorPanel({
+export const AIInspectorPanel = memo(function AIInspectorPanel({
   selectedTrain,
   selectedConflict,
   prediction,
@@ -381,6 +381,7 @@ export function AIInspectorPanel({
   onOverride,
   onSimulate,
 }: Props & { predictions?: PredictionEntry[] }) {
+  console.count("AIInspectorPanel render")
   const hasSelection = selectedTrain || selectedConflict
 
   return (
@@ -429,4 +430,4 @@ export function AIInspectorPanel({
       )}
     </div>
   )
-}
+})

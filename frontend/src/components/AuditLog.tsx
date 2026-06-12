@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { auditAPI } from '../services/api'
@@ -234,7 +234,7 @@ function LogRow({ log, index }: { log: AuditLogType; index: number }) {
   )
 }
 
-export function AuditLog({ logs: propLogs, sessionId }: Props) {
+export const AuditLog = memo(function AuditLog({ logs: propLogs, sessionId }: Props) {
   const [filter, setFilter] = useState<string>('all')
   const [search, setSearch] = useState('')
 
@@ -378,4 +378,4 @@ export function AuditLog({ logs: propLogs, sessionId }: Props) {
       </div>
     </div>
   )
-}
+})

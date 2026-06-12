@@ -37,14 +37,37 @@ const VIEW_META: Record<ViewId, { title: string; subtitle: string }> = {
 
 // ── Main App ──────────────────────────────────────────────────────────────
 export default function App() {
-  const {
-    trains, conflicts, liveConflicts, conflictHistory, stationState, blockOccupancy, signalStates,
-    simulationRunning, sessionId, simElapsedSec,
-    kpis, auditLogs, predictions, whatIfResult, activeRecommendation,
-    activeView, setActiveView, setWsConnected, setKpis, applyWSUpdate, addAuditLog,
-    setPredictions, setActiveRecommendation, exitFocusMode, tickConflictLifecycles,
-    setSelectedTrain, selectedTrainId, selectedConflictId, setSelectedConflict,
-  } = useStore()
+  console.count("App render")
+  const trains = useStore(s => s.trains)
+  const conflicts = useStore(s => s.conflicts)
+  const liveConflicts = useStore(s => s.liveConflicts)
+  const conflictHistory = useStore(s => s.conflictHistory)
+  const stationState = useStore(s => s.stationState)
+  const blockOccupancy = useStore(s => s.blockOccupancy)
+  const signalStates = useStore(s => s.signalStates)
+  const simulationRunning = useStore(s => s.simulationRunning)
+  const sessionId = useStore(s => s.sessionId)
+  const simElapsedSec = useStore(s => s.simElapsedSec)
+  const kpis = useStore(s => s.kpis)
+  const auditLogs = useStore(s => s.auditLogs)
+  const predictions = useStore(s => s.predictions)
+  const whatIfResult = useStore(s => s.whatIfResult)
+  const activeRecommendation = useStore(s => s.activeRecommendation)
+  const activeView = useStore(s => s.activeView)
+  const selectedTrainId = useStore(s => s.selectedTrainId)
+  const selectedConflictId = useStore(s => s.selectedConflictId)
+
+  const setActiveView = useStore(s => s.setActiveView)
+  const setWsConnected = useStore(s => s.setWsConnected)
+  const setKpis = useStore(s => s.setKpis)
+  const applyWSUpdate = useStore(s => s.applyWSUpdate)
+  const addAuditLog = useStore(s => s.addAuditLog)
+  const setPredictions = useStore(s => s.setPredictions)
+  const setActiveRecommendation = useStore(s => s.setActiveRecommendation)
+  const exitFocusMode = useStore(s => s.exitFocusMode)
+  const tickConflictLifecycles = useStore(s => s.tickConflictLifecycles)
+  const setSelectedTrain = useStore(s => s.setSelectedTrain)
+  const setSelectedConflict = useStore(s => s.setSelectedConflict)
 
   // ── Register resize (drag) ─────────────────────────────────────────────
   const [registerH, setRegisterH] = useState(200)

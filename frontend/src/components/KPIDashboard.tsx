@@ -7,6 +7,7 @@
  * Minimum font sizes: labels 11px, values 13px (SKILL.md compliant).
  */
 
+import { memo } from 'react'
 import { KPIMetrics } from '../types/api'
 import { Train } from '../types/train'
 import { useStore } from '../store/index'
@@ -60,7 +61,7 @@ function KPIItem({ label, value, color, blink }: Metric) {
   )
 }
 
-export function KPIDashboard({ metrics, trains }: Props) {
+export const KPIDashboard = memo(function KPIDashboard({ metrics, trains }: Props) {
   const smoothedKpis = useStore(s => s.smoothedKpis)
   const d = smoothedKpis ?? metrics
 
@@ -110,4 +111,4 @@ export function KPIDashboard({ metrics, trains }: Props) {
       ))}
     </div>
   )
-}
+})
