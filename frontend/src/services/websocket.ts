@@ -21,8 +21,15 @@ export class TrackMindWebSocket {
   public status: WSStatus = 'disconnected'
 
   constructor(path = '/ws/live') {
-    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-    this.url = `${proto}://${window.location.host}${path}`
+    const wsUrl = import.meta.env.VITE_WS_URL
+    if (wsUrl) {
+      const baseUrl = wsUrl.endsWith('/') ? wsUrl.slice(0, -1) : wsUrl
+      const cleanPath = path.startsWith('/') ? path : `/${path}`
+      this.url = `${baseUrl}${cleanPath}`
+    } else {
+      const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+      this.url = `${proto}://${window.location.host}${path}`
+    }
   }
 
   connect(): void {
