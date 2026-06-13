@@ -161,6 +161,13 @@ Inline header tracking: **Active Trains**, **Conflicts**, **Avg Network Delay**,
 
 ---
 
+## 📖 View Docs
+
+- **Architecture**: [View here](docs/ARCHITECTURE.md)
+- **API**: [View here](docs/API.md)
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
