@@ -1,79 +1,361 @@
-# TrackMind - AI-Powered Network Control Centre
+# 🚆 TrackMind — AI-Powered Railway Network Control Centre
 
-TrackMind is a next-generation railway operations control center designed to revolutionize how section controllers manage train movements. Built for international hackathon standards, it demonstrates how AI, real-time data, and high-density UI/UX can solve critical bottlenecks in legacy railway traffic management systems.
+> **FAR AWAY 2026 Hackathon Submission — Railways Theme**
+> *Transforming legacy railway operations with proactive AI, real-time simulation, and explainable decision support.*
+
+---
+
+## 🎬 Demo
+
+| | |
+|---|---|
+| **📹 Video Demo** | [Watch on Google Drive](https://drive.google.com/file/d/1_SguffRtEOrF5GoHnen-Cdmc4hOICsyT/view?usp=sharing) |
+
+---
 
 ## ⚠️ The Problem: Legacy Operations & Cognitive Overload
 
-In major railway networks (like Indian Railways), section controllers manage the movement of dozens of trains across massive corridors simultaneously. The current reality of this job involves:
+In India's 68,000+ km railway network, section controllers manage dozens of simultaneous train movements across massive corridors — using **decades-old SCADA systems and paper-based train registers**.
 
-1. **Reactive Decision Making:** Controllers often only act *after* a conflict has occurred or a delay has compounded, leading to cascading delays across the network.
-2. **Cognitive Overload:** Legacy SCADA systems and Control Office Applications (COA) are cluttered, outdated, and require manual cross-referencing between separate screens, train registers, and paper charts.
-3. **Manual Conflict Resolution:** When a faster train needs to overtake a slower one, or two trains contend for the same platform, the controller must manually calculate speeds, distances, and clearances. Human error here leads to safety risks and massive throughput loss.
-4. **Lack of Explainability:** Even when automated scheduling tools exist, they function as "black boxes." Controllers don't trust systems that tell them what to do without explaining *why*.
+| Pain Point | Impact |
+|---|---|
+| **Reactive Decision-Making** | Controllers only act *after* delays compound, causing cascading failures |
+| **Cognitive Overload** | Cluttered legacy COA systems force manual cross-referencing across multiple screens |
+| **Manual Conflict Resolution** | Human-calculated speed, distance and clearance checks create safety risks |
+| **Black-Box Automation** | Automated tools that cannot explain *why* they recommend actions destroy controller trust |
+
+---
 
 ## 💡 The Solution: TrackMind
 
-TrackMind solves these problems by providing an **AI-assisted, proactive, and highly legible** command interface that acts as a co-pilot for the section controller.
+TrackMind is a next-generation **AI-assisted, proactive** command interface — a co-pilot for the section controller that sees conflicts before they happen and explains every recommendation in plain language.
 
-### How We Solve It
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Section Controller's Decision Loop — Powered by TrackMind  │
+│                                                             │
+│  Real-Time Telemetry (2Hz)                                  │
+│        │                                                    │
+│        ▼                                                    │
+│  ┌─────────────────┐    Conflict     ┌──────────────────┐   |
+│  │  Digital Twin   │───Detected──▶  │ AI Action Queue  │    │
+│  │  (SimPy engine) │                │  + SHAP explain  │    │
+│  └─────────────────┘                └──────────────────┘    │
+│        │                                    │               │
+│        ▼                                    ▼               │
+│  ┌──────────────┐               ┌─────────────────────┐     │
+│  │  Network Map │               │ Controller 1-Click  │     │
+│  │  (Live 70%)  │               │ Accept / Override   │     │
+│  └──────────────┘               └─────────────────────┘     │
+│                                         │                   │
+│                                         ▼                   │
+│                                  Immutable Audit Log        │
+└─────────────────────────────────────────────────────────────┘
+```
 
-- **Proactive Conflict Detection (T-Minus Warnings):** Instead of waiting for a delay to happen, TrackMind simulates future states and warns controllers of impending conflicts (e.g., "T-Minus 5 mins to overtaking conflict").
-- **AI-Driven Action Queue:** Conflicts are ranked by severity (Critical, Major, Minor). The AI proposes exact, executable solutions (e.g., "Loop passenger train at KLD to allow Express to pass") complete with confidence scores and estimated delay savings.
-- **Explainable AI (SHAP):** Controllers are shown exactly *why* a recommendation was made and the cascade risk if ignored, building trust between human operators and the AI.
-- **"What-If" Scenario Lab:** Controllers can test disruptions (e.g., "What if a signal fails at Pune?") and see the ripple effect across the network before making a decision.
-- **Operational Clarity:** The UI is stripped of generic dashboard "fluff" (no oversized cards, no meaningless charts). It uses a 70/30 layout prioritizing the real-time Network Occupancy Map, using established safety colors and dense, monospaced data tables for maximum scannability.
+---
 
-## ✨ Key Features for Hackathon Judges
+## ✨ Key Features
 
-*   **Real-Time Network Map (70% viewport):** A dense canvas showing live block occupancy, 3-light signal states, and train positions. Switchable between Light and Dark modes.
-*   **Integrated Action Queue (30% viewport):** The controller's primary workflow. Lists active conflicts, integrates AI recommendations with 1-click "Accept" or manual overrides, and tracks history.
-*   **Slide-over Analytical Drawers:**
-    *   **Time-Space Diagram:** Visualizes train trajectories to spot crossing points and headway violations.
-    *   **Delay Forecast:** ML-predicted delays with risk scores.
-    *   **Audit Log:** Immutable ledger of controller decisions for post-incident review.
-*   **KPI Dashboard Strip:** Inline header tracking active trains, current conflicts, average network delay, and throughput percentage.
+### 🗺️ Real-Time Network Occupancy Map (70% Viewport)
+Live canvas showing block occupancy, **3-light signal states** (🔴🟡🟢), and animated train positions updating at 2Hz via WebSocket. Supports both **Dark Mode** (dimly-lit control room) and Light Mode.
 
-## 🏗 Architecture & Tech Stack
+### ⚡ Proactive Conflict Detection (T-Minus Warnings)
+Deterministic sub-100ms engine detects **8 conflict types** before they occur:
 
-TrackMind uses a modern, performant architecture designed for real-time telemetry.
+| # | Conflict Type | Severity |
+|---|---|---|
+| 1 | Block Collision — two trains in same single-track block | 🔴 Critical (0.95) |
+| 2 | Opposing Deadlock — head-on on single track, no loop | 🔴 Critical (0.99) |
+| 3 | Signal Violation — train projected to cross red signal | 🔴 High (0.90) |
+| 4 | Platform Contention — station fully occupied | 🟠 High (0.85) |
+| 5 | Loop Saturation — loop at capacity, train approaching | 🟠 Major (0.75) |
+| 6 | Headway Violation — inter-train gap < 5 minutes | 🟡 Major (0.80) |
+| 7 | Overtaking Conflict — faster train closing on slower | 🟡 Minor (0.65) |
+| 8 | Capacity Overflow — more trains than station can handle | 🟡 Minor (0.50) |
 
-### Frontend (UI/UX)
-- **Framework:** React 18 + Vite for rapid, unbundled development.
-- **Language:** TypeScript for strict type safety in complex data structures.
-- **State Management:** Zustand for lightweight global state; React Query for caching server data.
-- **Real-Time Data:** WebSockets consuming a 2Hz telemetry stream to animate train movements seamlessly.
-- **Styling:** Custom CSS design system adhering strictly to professional UI/UX rules (WCAG 4.5:1 contrast, 44px touch targets, semantic tokens).
+### 🤖 AI-Driven Action Queue with CP-SAT Optimization
+Google OR-Tools **CP-SAT solver** generates the mathematically optimal schedule modification — minimising total weighted delay (Rajdhani=5, Express=3, Passenger=2, Freight=1). A greedy heuristic fallback always guarantees a valid solution.
 
-### Backend & Infrastructure
-- The backend handles simulation states, pathfinding algorithms for conflict resolution, and WebSocket broadcasting.
-- **Deployment:** Containerized with Docker and orchestrated via `docker-compose.yml`.
-- **Monitoring:** Prometheus integration for backend metrics.
+### 🧠 Explainable AI (SHAP Values)
+Every recommendation shows controllers **exactly why** it was generated — which features (section load, delay, priority class, speed ratio) contributed most to the decision. Builds human trust in automated systems.
+
+### 🔬 "What-If" Scenario Lab
+Controllers can inject disruptions and see ripple effects *before* committing:
+- ➕ Add train delay (minutes)
+- 🚫 Close platform at any station
+- 🚨 Signal failure on any block
+- 🛤️ Block a track section
+- 🌧️ Weather event (speed reduction)
+
+### 📊 ML Delay Forecast (XGBoost + SHAP)
+Per-train delay predictions using XGBoost trained on 2,000 synthetic samples. Features include section load, speed ratio, priority class, hour of day, and path progress. Self-trains on startup — no external data required.
+
+### 🕐 Time-Space Diagram
+Interactive train trajectory visualization to spot crossing points and headway violations at a glance.
+
+### 📋 Immutable Audit Log
+Every controller decision (accept, override) is recorded with timestamps, reasoning, and outcome — essential for post-incident review and regulatory compliance.
+
+### 📈 KPI Dashboard Strip
+Inline header tracking: **Active Trains**, **Conflicts**, **Avg Network Delay**, **Block Utilization %**, **Throughput %**.
+
+---
+
+## 🏗️ Architecture & Tech Stack
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                          FRONTEND                                │
+│  React 18 + Vite + TypeScript                                    │
+│  ┌──────────────┐  ┌─────────────┐  ┌────────────────────────┐   │
+│  │  NetworkMap  │  │ ConflictAlert│ │ TimeSpaceDiagram       │   │
+│  │  (Canvas)    │  │ + AI Queue  │  │ (Plotly.js)            │   │
+│  └──────────────┘  └─────────────┘  └────────────────────────┘   │
+│  Zustand (state) · React Query (server cache) · WebSocket (2Hz)  │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ REST /api/v1 + WebSocket /ws/live
+┌──────────────────────────▼───────────────────────────────────────┐
+│                          BACKEND                                 │
+│  FastAPI + Uvicorn (Python 3.11)                                 │
+│                                                                  │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────────┐    │
+│  │ SimPy Digital  │  │ Conflict       │  │ OR-Tools CP-SAT  │    │
+│  │ Twin Engine    │  │ Detector       │  │ Optimizer        │    │
+│  │ (Module A)     │  │ (Module B)     │  │ (Module C)       │    │
+│  └────────────────┘  └────────────────┘  └──────────────────┘    │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────────┐    │
+│  │ Recommender    │  │ XGBoost/SHAP   │  │ What-If Engine   │    │
+│  │ (Module D)     │  │ Predictor(E)   │  │ (Module F)       │    │
+│  └────────────────┘  └────────────────┘  └──────────────────┘    │
+│                                                                  │
+│  PostgreSQL (SQLAlchemy async) · Redis (pub/sub) · Prometheus    │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### Frontend
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + Vite 5 |
+| Language | TypeScript 5 (strict mode) |
+| State | Zustand (global) + TanStack Query (server cache) |
+| Real-Time | WebSocket — 2Hz simulation telemetry stream |
+| Charts | Plotly.js (Time-Space Diagram) |
+| Animation | Framer Motion |
+| Styling | Custom CSS design system (WCAG 4.5:1, JetBrains Mono) |
+| Build | Multi-stage Docker → Nginx Alpine |
+
+### Backend
+| Layer | Technology |
+|---|---|
+| API Framework | FastAPI 0.111 + Uvicorn |
+| Language | Python 3.11 |
+| Simulation | SimPy 4 — discrete-event digital twin |
+| Optimization | Google OR-Tools CP-SAT (constraint programming) |
+| ML / Predictions | XGBoost + SHAP (self-trains on synthetic data) |
+| Graph / Routing | NetworkX |
+| Database | PostgreSQL 15 (async via SQLAlchemy + asyncpg) |
+| Cache / Pub-Sub | Redis 7 |
+| Monitoring | Prometheus + FastAPI Instrumentator |
+| Containerization | Docker + Docker Compose |
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
-- Docker and Docker Compose
-- Node.js (v18+)
+- **Docker** & **Docker Compose** (for full-stack)
+- **Node.js v18+** (for frontend-only dev)
+- **Python 3.11+** (for backend-only dev)
 
-### Run the Full Stack
-Spin up the backend simulation, AI engine, frontend, and monitoring with one command:
+### Option A — Full Stack (Recommended)
+Spin up everything (Frontend · Backend · PostgreSQL · Redis · Prometheus) with one command:
 ```bash
-docker-compose up -d
+git clone https://github.com/your-username/TrackMind.git
+cd TrackMind
+docker-compose up -d --build
 ```
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
+| API Docs (Swagger) | http://localhost:8000/docs |
+| Prometheus Metrics | http://localhost:9090 |
 
-### Run Frontend Locally (Dev Mode)
-To run just the frontend against an existing backend:
+### Option B — Frontend Dev Only
+Run the React frontend against an already-running backend:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Access the application at `http://localhost:5173`.
+Opens at `http://localhost:5173`
+
+### Option C — Backend Dev Only
+```bash
+cd backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # Mac/Linux
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+### Environment Variables
+
+**Backend** (`.env.local` in `/backend`):
+```env
+DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/trackmind
+REDIS_URL=redis://localhost:6379/0
+DEBUG=true
+CORS_ORIGINS=["http://localhost:5173"]
+```
+
+**Frontend** (`.env.local` in `/frontend` — only needed when not using Docker Nginx proxy):
+```env
+VITE_API_URL=http://localhost:8000/api/v1
+VITE_WS_URL=ws://localhost:8000
+```
+
+---
+
+## 📡 API Reference
+
+Full interactive API documentation available at `/docs` (Swagger UI) once the backend is running.
+
+### Key Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/v1/health` | System health check (DB, Redis, simulation status) |
+| `POST` | `/api/v1/simulate/start` | Load scenario and start simulation |
+| `POST` | `/api/v1/simulate/pause` | Pause simulation |
+| `POST` | `/api/v1/simulate/reset` | Reset to initial scenario state |
+| `GET` | `/api/v1/simulate/state` | Current simulation snapshot |
+| `POST` | `/api/v1/conflicts/detect` | Run conflict detection (configurable lookahead) |
+| `GET` | `/api/v1/conflicts/` | List all active conflicts |
+| `POST` | `/api/v1/optimize/solve` | Run CP-SAT optimization |
+| `GET` | `/api/v1/recommendations/{id}` | Get AI recommendation for a conflict |
+| `POST` | `/api/v1/recommendations/{id}/accept` | Accept recommendation (logged to audit) |
+| `POST` | `/api/v1/recommendations/{id}/override` | Override with custom action (logged) |
+| `POST` | `/api/v1/whatif/simulate` | Run a what-if disruption scenario |
+| `GET` | `/api/v1/kpi/` | Current KPIs |
+| `GET` | `/api/v1/kpi/predictions` | ML delay predictions per train |
+| `GET` | `/api/v1/audit/` | Audit log of controller decisions |
+| `WS` | `/ws/live` | Real-time simulation state stream (2Hz) |
+
+---
+
+---
 
 ## 🎨 Design Philosophy
-*   **Function Over Form:** Built for operators. No glassmorphism, no distracting animations. Focuses on spatial continuity and color semantics (Red = Danger, Amber = Warning, Green/Blue = Safe).
-*   **High Information Density:** Uses monospaced fonts (`JetBrains Mono`) for numbers to prevent layout shift. Compact spacing allows massive amounts of data without scrolling.
-*   **Dark Mode Native:** Essential for dimly lit, 24/7 control rooms to reduce eye strain.
+
+TrackMind's UI is purpose-built for **24/7 control rooms**, not dashboards.
+
+- **Function Over Form** — No decorative animations. Color semantics strictly enforced: 🔴 Red = Danger, 🟠 Amber = Warning, 🟢 Green/Blue = Safe
+- **High Information Density** — JetBrains Mono for all numeric data to prevent layout shift. Maximum data in minimum screen space
+- **Dark Mode Native** — Essential for dimly-lit control rooms, reduces eye strain during 12-hour shifts
+- **WCAG 4.5:1 Contrast** — All text meets accessibility contrast standards
+- **70/30 Split Layout** — 70% Network Map (primary operational view) + 30% Action Queue (controller workflow)
+
+---
+
+## 📁 Project Structure
+
+```
+TrackMind/
+├── frontend/                    # React + Vite application
+│   ├── src/
+│   │   ├── components/          # 13 UI components
+│   │   │   ├── NetworkMap.tsx        # Live railway map canvas
+│   │   │   ├── ConflictAlert.tsx     # AI action queue + alerts
+│   │   │   ├── TimeSpaceDiagram.tsx  # Train trajectory chart
+│   │   │   ├── KPIDashboard.tsx      # KPI header strip
+│   │   │   ├── WhatIfPanel.tsx       # Disruption lab
+│   │   │   ├── PredictionPanel.tsx   # ML delay forecasts
+│   │   │   ├── AIInspectorPanel.tsx  # SHAP explanation panel
+│   │   │   ├── AuditLog.tsx          # Decision history
+│   │   │   └── ...
+│   │   ├── services/
+│   │   │   ├── api.ts           # Axios REST client
+│   │   │   └── websocket.ts     # WebSocket client (auto-reconnect)
+│   │   ├── store/               # Zustand global state
+│   │   ├── types/               # TypeScript type definitions
+│   │   └── App.tsx              # Root component + layout
+│   ├── nginx.conf               # Production Nginx (SPA + WS proxy)
+│   └── Dockerfile               # Multi-stage: Node build → Nginx serve
+│
+├── backend/                     # FastAPI Python application
+│   ├── app/
+│   │   ├── main.py              # FastAPI app, CORS, WebSocket, lifespan
+│   │   ├── core/
+│   │   │   ├── config.py        # Pydantic settings (env-aware)
+│   │   │   ├── logging.py       # Structured logging
+│   │   │   └── middleware.py    # Request ID middleware
+│   │   ├── services/
+│   │   │   ├── simulator.py     # Module A: SimPy digital twin engine
+│   │   │   ├── conflict_detector.py  # Module B: 8-type conflict detection
+│   │   │   ├── optimizer.py     # Module C: CP-SAT + heuristic solver
+│   │   │   ├── recommender.py   # Module D: Action recommendation engine
+│   │   │   ├── predictor.py     # Module E: XGBoost + SHAP predictor
+│   │   │   ├── whatif_engine.py # Module F: What-if scenario analysis
+│   │   │   └── audit_service.py # Immutable decision audit log
+│   │   ├── routers/             # FastAPI route handlers (7 routers)
+│   │   ├── models/              # SQLAlchemy ORM models
+│   │   ├── db/                  # DB + Redis connection management
+│   │   └── data/                # Railway scenario definitions (JSON)
+│   ├── tests/                   # Pytest async test suite
+│   ├── requirements.txt         # Python dependencies
+│   └── Dockerfile               # Production Python container
+│
+├── docker-compose.yml           # Full-stack orchestration
+├── prometheus.yml               # Metrics scrape config
+└── docs/                        # Extended documentation
+    ├── API.md
+    └── ARCHITECTURE.md
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+# Backend unit + integration tests
+cd backend
+pytest tests/ -v --cov=app --cov-report=term-missing
+
+# Frontend (Vitest)
+cd frontend
+npm test
+```
+
+---
+
+## 🔮 Future Scope
+
+- **Multi-Corridor Support** — Scale from a single section to a full national railway network graph
+- **GTFS Integration** — Import real Indian Railways timetable data for production scenarios
+- **Federated Learning** — Collaborative model training across control centres without sharing raw data
+- **Natural Language Interface** — "What happens if the Deccan Queen is delayed by 20 minutes at Pune?"
+- **Mobile Command View** — Responsive tablet layout for field supervisors
+- **Digital Twin Validation** — Calibrate against real SCADA telemetry feeds
+
+---
+
+## 👥 Team
+
+| Member | Role |
+|---|---|
+| *Yashvin Mehra*   | Full-Stack + AI/ML Engineering |
+| *Akanksha Shirke* | Full-Stack + AI/ML Engineering |
+
+---
 
 ## 📄 License
-MIT License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+<div align="center">
+  Built for <strong>FAR AWAY 2026</strong> · Railways Theme · India's Biggest International Hackathon
+</div>
